@@ -10,12 +10,14 @@ import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
 INSTALL = """\
-# Install from PyPI only if not already available (e.g. in Colab). A local
-# editable install is used as-is.
+# Install only if not already available (e.g. in Colab). The GitHub install
+# needs no JS toolchain — the built widget bundle is committed in the repo. A
+# local editable install is used as-is. (Swap to `jbrowse-anywidget` once it's
+# published to PyPI.)
 try:
     import jbrowse_anywidget  # noqa: F401
 except ImportError:
-    %pip install -q jbrowse-anywidget pandas numpy
+    %pip install -q "jbrowse-anywidget @ git+https://github.com/cmdcolin/jbrowse-anywidget" pandas numpy
 
 # Colab requires this to render third-party (anywidget) widgets:
 try:
