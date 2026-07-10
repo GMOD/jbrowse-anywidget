@@ -120,6 +120,26 @@ index, and a catalog of hosted tracks — as plain JSON you pass in. Because the
 assembly carries refName aliases, your own tracks line up even when they name
 chromosomes differently (`chr17` vs `17`). See `examples/08_hosted_assembly_hub.ipynb`.
 
+## Comparing genomes (synteny, dotplots)
+
+`LinearGenomeView` is one linear view. For comparative genomics, `JBrowseApp`
+drives the full app from a declarative `views=[...]` list — each entry a
+`{"type", "init"}` dict, built with `linear_view`, `synteny_view`, and
+`dotplot_view`:
+
+```python
+from jbrowse_anywidget import JBrowseApp, synteny_view, synteny_track, make_assembly
+
+JBrowseApp(
+    assemblies=[make_assembly("hg38", hg38_fa), make_assembly("mm39", mm39_fa)],
+    tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
+    views=[synteny_view(["hg38", "mm39"], tracks=["hg38-mm39-paf"])],
+)
+```
+
+It loads a separate, larger bundle (the full app), so the single-view
+`LinearGenomeView` stays lean.
+
 ## Publishing (to make the Colab links live)
 
 The built JS bundle in `jbrowse_anywidget/static/` is committed, so the package
