@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+*.egg-info/
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+*.venv/
+# The built bundle in jbrowse_anywidget/static/ IS committed so that
+# `pip install git+https://...` (and Colab) work without a JS toolchain.

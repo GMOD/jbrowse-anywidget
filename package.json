@@ -1,0 +1,22 @@
+{
+  "name": "jbrowse-anywidget",
+  "version": "0.2.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@fontsource/roboto": "^5.1.0",
+    "@jbrowse/react-linear-genome-view2": "link:../jbrowse-components/products/jbrowse-react-linear-genome-view",
+    "mobx": "^6.16.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.5.1",
+    "vite": "^6.3.5",
+    "vite-plugin-node-polyfills": "0.22.0"
+  }
+}

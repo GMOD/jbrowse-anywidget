@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jbrowse-anywidget"
+version = "0.2.0"
+description = "JBrowse 2 linear genome view as an anywidget for notebooks"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+dependencies = ["anywidget>=0.9"]
+
+[project.optional-dependencies]
+dev = ["pandas", "watchfiles"]
+
+[tool.hatch.build]
+# Ship the prebuilt JS bundle; never the JS toolchain.
+artifacts = ["jbrowse_anywidget/static/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["jbrowse_anywidget"]
