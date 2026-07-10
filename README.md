@@ -15,9 +15,11 @@ just a Vite-bundled ESM file loaded by anywidget.
 - DataFrame → track (analysis-ready) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
 - GPU alignments (BAM/CRAM) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)
 - Multi-sample variants — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)
+- Call CNVs → view them (ERBB2 amplification) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/05_cnv_calling.ipynb)
+- Selection scan (Fst) → view the sweep (LCT) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)
 
-(Badges go live once this is pushed to `github.com/cmdcolin/jbrowse-anywidget` and
-published to PyPI — see Publishing below.)
+The last two are the core loop — **run an analysis in Python, load the result
+onto the genome** — with everything computed in the notebook (no downloads).
 
 ## Develop
 
@@ -92,9 +94,9 @@ manager (`output.enable_custom_widget_manager()`).
 
 Prototype consolidating two earlier experiments
 (`experiments/jbrowse_lgv_widget`, `dont_care/jb2anywidget`), now bundling the
-GPU-rendered v4 view. All four notebooks in `examples/` are verified to execute
-headless, and the bigwig/DataFrame/alignments/variant track configs are verified
-to render in a headless browser.
+GPU-rendered v4 view. All six notebooks in `examples/` are verified to execute
+headless, and their track configs (bigwig, DataFrame, alignments, variants, CNV
+segments, Fst windows) are verified to render in a headless browser.
 
 Next: a matching synteny/dotplot widget (a different view type, so a separate
 component), a binary fast-path for large feature sets, and an R wrapper over the

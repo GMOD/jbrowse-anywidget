@@ -327,4 +327,192 @@ save(
     ],
 )
 
+# --- 05 CNV calling ---------------------------------------------------------
+save(
+    "05_cnv_calling.ipynb",
+    [
+        new_markdown_cell(
+            "# Call CNVs, then see them in context\n\n"
+            + badge("05_cnv_calling.ipynb")
+            + "\n\nThe notebook loop: **run an analysis, drop the result onto "
+            "the genome.** Here we segment binned read-depth into "
+            "copy-number gains and losses, then load the calls as a track — no "
+            "file written. The synthetic depth carries a focal amplification at "
+            "*ERBB2* (HER2), the classic breast-cancer CNV."
+        ),
+        new_code_cell(INSTALL),
+        new_markdown_cell(
+            "## The signal: binned log2 depth ratio\n\n"
+            "Stand-in for a tumor/normal coverage ratio over a stretch of "
+            "chr17. Swap it for your own binned depth (`cnvkit`, `mosdepth`, …) "
+            "as long as it has chrom/start/end and a log2 column."
+        ),
+        new_code_cell(
+            'import numpy as np\n'
+            'import pandas as pd\n\n'
+            'rng = np.random.default_rng(0)\n'
+            'chrom, start, end, binsize = "17", 39_000_000, 40_200_000, 10_000\n'
+            'bin_starts = np.arange(start, end, binsize)\n'
+            'log2 = rng.normal(0, 0.25, size=bin_starts.size)\n\n'
+            '# a focal ERBB2/HER2 amplification, plus a nearby deletion\n'
+            'log2[(bin_starts >= 39_680_000) & (bin_starts < 39_740_000)] += 2.4\n'
+            'log2[(bin_starts >= 39_180_000) & (bin_starts < 39_260_000)] -= 1.4\n\n'
+            'bins = pd.DataFrame(\n'
+            '    {\n'
+            '        "chrom": chrom,\n'
+            '        "start": bin_starts,\n'
+            '        "end": bin_starts + binsize,\n'
+            '        "log2": log2.round(3),\n'
+            '    }\n'
+            ')\n'
+            'bins.head()'
+        ),
+        new_markdown_cell(
+            "## Call segments\n\n"
+            "Smooth, threshold into gain/loss/neutral, and merge adjacent "
+            "like-state bins into segments — a toy segmenter standing in for "
+            "CBS/HMM."
+        ),
+        new_code_cell(
+            'GAIN, LOSS = 0.4, -0.4\n'
+            'smooth = bins["log2"].rolling(5, center=True, min_periods=1).median().to_numpy()\n'
+            'state = np.where(smooth > GAIN, "gain", np.where(smooth < LOSS, "loss", "neutral"))\n\n'
+            'segments, i = [], 0\n'
+            'while i < len(bins):\n'
+            '    j = i\n'
+            '    while j + 1 < len(bins) and state[j + 1] == state[i]:\n'
+            '        j += 1\n'
+            '    if state[i] != "neutral":\n'
+            '        segments.append(\n'
+            '            {\n'
+            '                "chrom": chrom,\n'
+            '                "start": int(bins["start"][i]),\n'
+            '                "end": int(bins["end"][j]),\n'
+            '                "state": state[i],\n'
+            '                "mean_log2": round(float(smooth[i : j + 1].mean()), 2),\n'
+            '            }\n'
+            '        )\n'
+            '    i = j + 1\n\n'
+            'calls = pd.DataFrame(segments)\n'
+            'calls'
+        ),
+        new_markdown_cell(
+            "## Load signal + calls onto the genome\n\n"
+            "Two `add_features` tracks: the per-bin log2 (red gain / blue loss) "
+            "and the called segments on top. `color` is a jexl expression over "
+            "each feature's own columns."
+        ),
+        new_code_cell(
+            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
+            'grch38 = make_assembly(\n'
+            '    "GRCh38",\n'
+            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    aliases=["hg38"],\n'
+            ')\n'
+            'view = LinearGenomeView(assembly=grch38, location="17:39,000,000..40,200,000")\n'
+            'view.add_features(\n'
+            '    bins,\n'
+            '    name="log2 depth ratio",\n'
+            '    color="jexl:get(feature,\'log2\') > 0.4 ? \'#c62828\' : get(feature,\'log2\') < -0.4 ? \'#1565c0\' : \'#cfcfcf\'",\n'
+            ')\n'
+            'view.add_features(\n'
+            '    calls,\n'
+            '    name="CNV calls",\n'
+            '    color="jexl:get(feature,\'state\') == \'gain\' ? \'#c62828\' : \'#1565c0\'",\n'
+            ')\n'
+            'view'
+        ),
+        new_markdown_cell(
+            "Zoom to *ERBB2* to land on the amplified segment (drives the view "
+            "from Python):"
+        ),
+        new_code_cell('view.location = "17:39,650,000..39,770,000"'),
+    ],
+)
+
+# --- 06 popgen selection scan -----------------------------------------------
+save(
+    "06_popgen_selection.ipynb",
+    [
+        new_markdown_cell(
+            "# Scan for selection (Fst), then view the sweep\n\n"
+            + badge("06_popgen_selection.ipynb")
+            + "\n\nSame loop, population genetics: compute a windowed **Fst** "
+            "between two populations and load it as a track to spot loci that "
+            "differ. The synthetic data carries a selective sweep at "
+            "*LCT/MCM6* — the lactase-persistence locus."
+        ),
+        new_code_cell(INSTALL),
+        new_markdown_cell(
+            "## Simulate allele frequencies in two populations\n\n"
+            "Per-SNP alternate-allele frequencies over a stretch of chr2, with "
+            "a sweep raising frequencies in population 1 around *LCT*. Swap for "
+            "your own frequencies (e.g. from a multi-sample VCF)."
+        ),
+        new_code_cell(
+            'import numpy as np\n'
+            'import pandas as pd\n\n'
+            'rng = np.random.default_rng(1)\n'
+            'chrom, start, end = "2", 135_000_000, 137_000_000\n'
+            'pos = np.sort(rng.integers(start, end, size=4000))\n\n'
+            'anc = rng.uniform(0.05, 0.95, size=pos.size)  # shared ancestral freq\n'
+            'p1 = np.clip(anc + rng.normal(0, 0.05, pos.size), 0.001, 0.999)\n'
+            'p2 = np.clip(anc + rng.normal(0, 0.05, pos.size), 0.001, 0.999)\n\n'
+            '# selective sweep at LCT/MCM6: push pop-1 frequencies up\n'
+            'sweep = (pos >= 135_780_000) & (pos <= 135_860_000)\n'
+            'p1[sweep] = np.clip(p1[sweep] + 0.6, 0.001, 0.999)'
+        ),
+        new_markdown_cell(
+            "## Windowed Hudson Fst\n\n"
+            "Fst per window as a ratio of summed numerators to denominators "
+            "(the Bhatia et al. recommendation), in 20 kb windows."
+        ),
+        new_code_cell(
+            'num = (p1 - p2) ** 2\n'
+            'den = p1 * (1 - p2) + p2 * (1 - p1)\n\n'
+            'win = 20_000\n'
+            'edges = np.arange(start, end + win, win)\n'
+            'w = np.searchsorted(edges, pos, side="right") - 1\n\n'
+            'rows = []\n'
+            'for k in range(len(edges) - 1):\n'
+            '    m = w == k\n'
+            '    if m.sum() >= 5:\n'
+            '        fst = float(num[m].sum() / den[m].sum())\n'
+            '        rows.append(\n'
+            '            {\n'
+            '                "chrom": chrom,\n'
+            '                "start": int(edges[k]),\n'
+            '                "end": int(edges[k + 1]),\n'
+            '                "fst": round(max(fst, 0.0), 3),\n'
+            '                "n_snps": int(m.sum()),\n'
+            '            }\n'
+            '        )\n\n'
+            'windows = pd.DataFrame(rows)\n'
+            'windows.sort_values("fst", ascending=False).head()'
+        ),
+        new_markdown_cell(
+            "## Load the scan onto the genome\n\n"
+            "Windows colored by Fst — orange/red where the populations diverge. "
+            "The peak sits over *LCT*."
+        ),
+        new_code_cell(
+            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
+            'grch38 = make_assembly(\n'
+            '    "GRCh38",\n'
+            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    aliases=["hg38"],\n'
+            ')\n'
+            'view = LinearGenomeView(assembly=grch38, location="2:135,000,000..137,000,000")\n'
+            'view.add_features(\n'
+            '    windows,\n'
+            '    name="Fst (pop1 vs pop2)",\n'
+            '    color="jexl:get(feature,\'fst\') > 0.25 ? \'#d84315\' : get(feature,\'fst\') > 0.1 ? \'#f9a825\' : \'#90a4ae\'",\n'
+            ')\n'
+            'view'
+        ),
+        new_markdown_cell("Zoom to the *LCT* sweep:"),
+        new_code_cell('view.location = "2:135,700,000..135,900,000"'),
+    ],
+)
+
 print("done")
