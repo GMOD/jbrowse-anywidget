@@ -12,7 +12,7 @@ license = "Apache-2.0"
 dependencies = ["anywidget>=0.9"]
 
 [project.optional-dependencies]
-dev = ["pandas", "watchfiles"]
+dev = ["pandas", "watchfiles", "pytest"]
 
 [tool.hatch.build]
 # Ship the prebuilt JS bundle; never the JS toolchain.

@@ -42,40 +42,58 @@ Regenerate the notebooks with `python scripts/build_examples.py`.
 
 ## API sketch
 
-The interface is JBrowse's own config. Assemblies, tracks, and sessions are the
-same [JSON-like dicts](https://jbrowse.org/jb2/docs/config_guide/) JBrowse uses
-everywhere, handed straight to the view — so every track type and adapter works
-with no Python wrapper to keep in sync.
+A whole view is one declarative call. `track(uri)` infers the track type and
+adapter from the file extension — the shorthand `@jbrowse/img`'s
+`--bam`/`--bigwig`/`--cram` flags give the CLI — and `assembly="hg38"` fetches a
+hosted genome by name, so nothing but URLs is needed:
 
 ```python
-from jbrowse_anywidget import LinearGenomeView, make_assembly
+from jbrowse_anywidget import LinearGenomeView, track
 
 view = LinearGenomeView(
-    assembly=make_assembly("hg38", ".../hg38.fa.gz"),
+    assembly="hg38",
     location="10:29,838,565..29,838,850",
+    tracks=[
+        track("https://.../ncbiRefSeq.sort.gff.gz"),
+        track("https://.../phyloP100way.bw"),
+        track("https://.../reads.cram"),
+    ],
 )
-
-# any JBrowse track config — the same JSON you'd put in a config file
-view.add_track({
-    "type": "AlignmentsTrack",
-    "trackId": "reads",
-    "name": "reads",
-    "assemblyNames": ["hg38"],
-    "adapter": {"type": "CramAdapter", "uri": ".../reads.cram"},  # GPU pileup
-})
-
-# the one thing JSON can't do: an in-memory DataFrame becomes a track, no file
-view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
-
 view            # display
 view.location   # read back the user's current region
 ```
 
-Python adds only what config JSON can't express itself: `add_features`
-(DataFrame/list of dicts → track) and `make_assembly` (a little assembly
-boilerplate). Everything else is `add_track(<config dict>)` — or pass whole
-`tracks=[...]` / `default_session={...}` configs to the constructor. Tracks are
-opened in the view automatically; removing one from `view.tracks` closes it.
+`track` recognizes `.bam`, `.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`, `.vcf.gz`,
+`.gff.gz`/`.gff3.gz`, `.bed.gz`, and `.hic`; index locations default to the
+conventional sibling (`.bai`/`.crai`/`.tbi`, override with `index=`). It returns
+a plain config dict, and `assemblyNames` is filled from the view's assembly — so
+a `tracks=[...]` list needs no per-track boilerplate. Anything past the defaults
+(colors, display settings) is a key you add to that dict — the same JBrowse
+config JSON, not a Python wrapper around it.
+
+Under the shorthand it's all JBrowse's own config. Assemblies, tracks, and
+sessions are the same [JSON-like dicts](https://jbrowse.org/jb2/docs/config_guide/)
+JBrowse uses everywhere, handed straight to the view, so any track type or
+adapter `track()` doesn't cover you write as a dict — the exact JSON from a
+config file:
+
+```python
+view.add_track({
+    "type": "AlignmentsTrack", "trackId": "reads", "name": "reads",
+    "assemblyNames": ["hg38"],
+    "adapter": {"type": "CramAdapter", "uri": ".../reads.cram"},
+})
+
+# the one thing JSON can't do: an in-memory DataFrame becomes a track, no file
+view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
+```
+
+Python adds only what config JSON can't express itself: `track` (URI → track
+config), `add_features` (DataFrame/list of dicts → track) and `make_assembly` (a
+little assembly boilerplate). Everything else is `add_track(<config dict>)` — or
+pass whole `tracks=[...]` / `default_session={...}` configs to the constructor.
+Tracks are opened in the view automatically; removing one from `view.tracks`
+closes it.
 
 For human/model-organism data, `fetch_hub("hg38")` (also `hg19`, `mm10`, a
 GenArk `GCA_...`) returns a ready, CORS-enabled assembly config from

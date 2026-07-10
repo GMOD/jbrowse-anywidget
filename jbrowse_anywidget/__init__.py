@@ -9,6 +9,20 @@ handed straight to the view. `assembly=` also accepts a hub name (``"hg38"``,
 ``"GCF_..."``) that the view fetches and resolves. Python adds only what JSON
 can't express itself — turning an in-memory DataFrame into a track
 (`add_features`) and a little assembly boilerplate (`make_assembly`).
+
+For the common case, `track(uri)` infers the track type and adapter from the
+file extension — the declarative shorthand `@jbrowse/img`'s `--bam`/`--bigwig`
+flags give the CLI — so a whole view is one flat, config-free call::
+
+    view = LinearGenomeView(
+        assembly="hg38",
+        location="10:29,838,565..29,838,850",
+        tracks=[
+            track("https://.../ncbiRefSeq.sort.gff.gz"),
+            track("https://.../phyloP100way.bw"),
+            track("https://.../reads.cram"),
+        ],
+    )
 """
 
 import json
@@ -21,7 +35,7 @@ import traitlets
 
 _STATIC = Path(__file__).parent / "static"
 
-__all__ = ["LinearGenomeView", "make_assembly", "fetch_hub"]
+__all__ = ["LinearGenomeView", "track", "make_assembly", "fetch_hub"]
 
 
 class LinearGenomeView(anywidget.AnyWidget):
@@ -121,16 +135,33 @@ class LinearGenomeView(anywidget.AnyWidget):
             ]
         self.add_track(track)
 
-    def _assembly_name(self, assembly_name):
-        if assembly_name:
-            return assembly_name
-        # a hub-name string ("hg38") is both the input and the resolved name
+    def _resolved_assembly_name(self):
+        # a hub-name string ("hg38") is both the input and the resolved name; a
+        # config dict carries its name under "name". Returns None when unset.
         if isinstance(self.assembly, str):
-            return self.assembly
-        name = self.assembly.get("name")
+            return self.assembly or None
+        return self.assembly.get("name") or None
+
+    def _assembly_name(self, assembly_name):
+        name = assembly_name or self._resolved_assembly_name()
         if not name:
             raise ValueError("no assembly set; pass assembly_name=")
         return name
+
+    @traitlets.validate("tracks")
+    def _fill_assembly_names(self, proposal):
+        # A track config needs assemblyNames, but making the caller repeat the
+        # assembly on every track() is noise — backfill it from the view's own
+        # assembly so tracks=[track(uri), ...] just works. Explicit
+        # assemblyNames (e.g. a synteny track) is left untouched.
+        name = self._resolved_assembly_name()
+        tracks = proposal["value"]
+        if name:
+            return [
+                t if t.get("assemblyNames") else {**t, "assemblyNames": [name]}
+                for t in tracks
+            ]
+        return tracks
 
 
 def make_assembly(
@@ -174,6 +205,95 @@ def make_assembly(
             }
         }
     return assembly
+
+
+# Extension → adapter, the same map jb2export applies to its --bam/--bigwig/…
+# flags (products/jbrowse-img/src/makeConfigs.ts).
+def _index_type(index_uri, default):
+    return "CSI" if index_uri.endswith(".csi") else default
+
+
+def _infer_adapter(uri, index):
+    """Map a data-file URI to (track_type, adapter_dict) by extension."""
+    lower = uri.split("?")[0].split("#")[0].lower()
+    loc = {"uri": uri}
+    if lower.endswith(".bam"):
+        idx = index or uri + ".bai"
+        return "AlignmentsTrack", {
+            "type": "BamAdapter",
+            "bamLocation": loc,
+            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "BAI")},
+        }
+    if lower.endswith(".cram"):
+        return "AlignmentsTrack", {
+            "type": "CramAdapter",
+            "cramLocation": loc,
+            "craiLocation": {"uri": index or uri + ".crai"},
+        }
+    if lower.endswith((".bw", ".bigwig")):
+        return "QuantitativeTrack", {"type": "BigWigAdapter", "bigWigLocation": loc}
+    if lower.endswith((".bb", ".bigbed")):
+        return "FeatureTrack", {"type": "BigBedAdapter", "bigBedLocation": loc}
+    if lower.endswith(".hic"):
+        return "HicTrack", {"type": "HicAdapter", "hicLocation": loc}
+    if lower.endswith(".vcf.gz"):
+        idx = index or uri + ".tbi"
+        return "VariantTrack", {
+            "type": "VcfTabixAdapter",
+            "vcfGzLocation": loc,
+            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
+        }
+    if lower.endswith((".gff.gz", ".gff3.gz")):
+        idx = index or uri + ".tbi"
+        return "FeatureTrack", {
+            "type": "Gff3TabixAdapter",
+            "gffGzLocation": loc,
+            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
+        }
+    if lower.endswith(".bed.gz"):
+        idx = index or uri + ".tbi"
+        return "FeatureTrack", {
+            "type": "BedTabixAdapter",
+            "bedGzLocation": loc,
+            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
+        }
+    raise ValueError(
+        f"can't infer a track type from {uri!r}; supported extensions: "
+        ".bam, .cram, .bw/.bigwig, .bb/.bigbed, .vcf.gz, .gff.gz/.gff3.gz, "
+        ".bed.gz, .hic. For anything else write the track config dict directly."
+    )
+
+
+def track(uri, name=None, track_id=None, assembly_name=None, index=None):
+    """Build a track config from a data-file URI, inferring type from extension.
+
+    The declarative shorthand — the Python analog of jbrowse-img's `--bam`,
+    `--bigwig`, `--cram` flags. Recognizes .bam, .cram, .bw/.bigwig, .bb/.bigbed,
+    .vcf.gz, .gff.gz/.gff3.gz, .bed.gz, and .hic; index locations default to the
+    conventional sibling (.bai/.crai/.tbi) and `index=` overrides them (a `.csi`
+    index is detected by extension). Returns a plain JBrowse track config dict you
+    can hand to `tracks=[...]` or `add_track` — so anything beyond the defaults
+    (colors, display settings) is a key you add to it, the same JSON JBrowse's
+    config guide documents, not another Python wrapper. `assemblyNames` is filled
+    from the view's assembly when omitted, so `tracks=[track(uri), ...]` needs no
+    per-track assembly.
+    """
+    track_type, adapter = _infer_adapter(uri, index)
+    name = name if name else _basename(uri)
+    conf = {
+        "type": track_type,
+        "trackId": track_id if track_id else _slug(name),
+        "name": name,
+        "adapter": adapter,
+    }
+    if assembly_name:
+        conf["assemblyNames"] = [assembly_name]
+    return conf
+
+
+def _basename(uri):
+    path = uri.split("?")[0].split("#")[0].rstrip("/")
+    return path.rsplit("/", 1)[-1]
 
 
 def _to_features(features, track_id):
