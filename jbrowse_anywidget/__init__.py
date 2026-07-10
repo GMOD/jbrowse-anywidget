@@ -50,7 +50,17 @@ if TYPE_CHECKING:
 
 _STATIC = Path(__file__).parent / "static"
 
-__all__ = ["LinearGenomeView", "track", "make_assembly", "fetch_hub"]
+__all__ = [
+    "LinearGenomeView",
+    "JBrowseApp",
+    "track",
+    "linear_view",
+    "synteny_view",
+    "dotplot_view",
+    "synteny_track",
+    "make_assembly",
+    "fetch_hub",
+]
 
 # A JBrowse config object (assembly, track, adapter, …): plain JSON as a dict.
 JsonDict = dict[str, Any]
@@ -196,6 +206,142 @@ class LinearGenomeView(anywidget.AnyWidget):
                 conf = {**conf, "assemblyNames": [name]}
             out.append(conf)
         return out
+
+
+class JBrowseApp(anywidget.AnyWidget):
+    """The full JBrowse 2 app — any number of views of any type, declared up front.
+
+    Where `LinearGenomeView` shows a single linear view, this drives the whole
+    app engine, so `views=[...]` can mix a `LinearGenomeView`, a
+    `LinearSyntenyView`, a `DotplotView`, and more. Each entry is a
+    ``{"type", "init"}`` dict — the same vocabulary JBrowse Web serializes into
+    its ``?session=spec-…`` URLs — built most easily with the `linear_view`,
+    `synteny_view`, and `dotplot_view` helpers::
+
+        view = JBrowseApp(
+            assemblies=[make_assembly("hg38", ...), make_assembly("mm39", ...)],
+            tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
+            views=[synteny_view(["hg38", "mm39"], tracks=["hg38_mm39.paf"])],
+        )
+
+    Unlike `LinearGenomeView`, `tracks` here are full JBrowse track config dicts
+    (a synteny track spans two assemblies, so there's no single-assembly
+    shorthand to infer); `synteny_track` builds the common PAF case.
+    """
+
+    _esm = _STATIC / "app.js"
+    _css = _STATIC / "jbrowse-anywidget.css"
+
+    # Config, pushed Python -> JS. assemblies/tracks are JBrowse config-dict
+    # lists; views is the [{type, init}] list of views to open. A change to any
+    # rebuilds the app.
+    assemblies = traitlets.List().tag(sync=True)
+    tracks = traitlets.List().tag(sync=True)
+    views = traitlets.List().tag(sync=True)
+
+    def __init__(
+        self,
+        assemblies: list[JsonDict] | None = None,
+        tracks: list[JsonDict] | None = None,
+        views: list[JsonDict] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        if assemblies is not None:
+            self.assemblies = list(assemblies)
+        if tracks is not None:
+            self.tracks = list(tracks)
+        if views is not None:
+            self.views = list(views)
+
+
+def linear_view(
+    assembly: str,
+    loc: str | None = None,
+    tracks: list[str] | None = None,
+    **init: Any,
+) -> JsonDict:
+    """Describe a `LinearGenomeView` for `JBrowseApp(views=[...])`.
+
+    `tracks` are trackIds (referencing `JBrowseApp`'s `tracks`); extra keyword
+    args ride onto the view's init blob (e.g. `colorByCDS=True`).
+    """
+    blob: JsonDict = {"assembly": assembly, **init}
+    if loc is not None:
+        blob["loc"] = loc
+    if tracks is not None:
+        blob["tracks"] = list(tracks)
+    return {"type": "LinearGenomeView", "init": blob}
+
+
+def _panels(assemblies: list[str] | list[JsonDict]) -> list[JsonDict]:
+    # each comparative-view panel is {"assembly", "loc"?}; accept bare assembly
+    # names or full panel dicts
+    return [a if isinstance(a, dict) else {"assembly": a} for a in assemblies]
+
+
+def synteny_view(
+    assemblies: list[str] | list[JsonDict],
+    tracks: list[str] | None = None,
+    cigar_mode: str | None = None,
+    **init: Any,
+) -> JsonDict:
+    """Describe a `LinearSyntenyView` comparing two (or more) assemblies.
+
+    `assemblies` is a list of assembly names (or `{"assembly", "loc"}` panel
+    dicts, to focus each panel on a region); `tracks` are the synteny trackIds
+    tying them together. `cigar_mode` is `"full"`/`"matches"`/`"off"`.
+    """
+    blob: JsonDict = {"views": _panels(assemblies), **init}
+    if tracks is not None:
+        blob["tracks"] = list(tracks)
+    if cigar_mode is not None:
+        blob["cigarMode"] = cigar_mode
+    return {"type": "LinearSyntenyView", "init": blob}
+
+
+def dotplot_view(
+    assemblies: list[str] | list[JsonDict],
+    tracks: list[str] | None = None,
+    **init: Any,
+) -> JsonDict:
+    """Describe a `DotplotView` comparing two assemblies via a synteny track."""
+    blob: JsonDict = {"views": _panels(assemblies), **init}
+    if tracks is not None:
+        blob["tracks"] = list(tracks)
+    return {"type": "DotplotView", "init": blob}
+
+
+def synteny_track(
+    uri: str,
+    target_assembly: str,
+    query_assembly: str,
+    name: str | None = None,
+    track_id: str | None = None,
+    **extra: Any,
+) -> JsonDict:
+    """Build a synteny (PAF) track config spanning two assemblies.
+
+    `target_assembly`/`query_assembly` name the two sides (PAF target = the
+    first assembly of a `synteny_view`). For anything beyond a plain `.paf` —
+    a bgzipped+indexed PAF, or a `.chain`/`.delta`/`.anchors` file — pass a full
+    track config dict instead.
+    """
+    display_name = name if name is not None else _clean_uri(uri).rsplit("/", 1)[-1]
+    conf: JsonDict = {
+        "type": "SyntenyTrack",
+        "trackId": track_id if track_id is not None else _slug(display_name),
+        "name": display_name,
+        "assemblyNames": [target_assembly, query_assembly],
+        "adapter": {
+            "type": "PAFAdapter",
+            "targetAssembly": target_assembly,
+            "queryAssembly": query_assembly,
+            "pafLocation": {"uri": uri},
+        },
+        **extra,
+    }
+    return conf
 
 
 def make_assembly(

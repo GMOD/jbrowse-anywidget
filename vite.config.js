@@ -24,11 +24,14 @@ const shimAliases = ['process', 'global', 'buffer'].map(name => ({
   ),
 }))
 
-// Bundle everything into a single ESM file that anywidget loads via _esm.
-// inlineDynamicImports keeps it to one file so there are no sibling chunks to
-// resolve at runtime. RPC currently runs on the main thread (no
-// makeWorkerInstance); an inlined RPC worker was tried but roughly doubled the
-// bundle and pulled UI code into the worker, so it was dropped.
+// Two independent single-file ESM bundles, each loaded by an anywidget via
+// _esm: the default `index.js` (lean linear-genome-view) and, when JB_TARGET=app,
+// `app.js` (the full multi-view app for synteny/dotplot/etc). They are built by
+// separate `vite build` invocations (see package.json) because inlineDynamicImports
+// — which keeps each to one runtime-resolvable file — forbids multiple entries in
+// one build. RPC runs on the main thread (no makeWorkerInstance) in both.
+const isApp = process.env.JB_TARGET === 'app'
+
 export default defineConfig({
   plugins: [
     // nodePolyfills adds a `stream` prefix-alias that rewrites `stream/web` to
@@ -60,11 +63,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'jbrowse_anywidget/static',
-    emptyOutDir: true,
+    // only the first (lgv) build clears the dir; the app build appends to it
+    emptyOutDir: !isApp,
     lib: {
-      entry: 'src/index.jsx',
+      entry: isApp ? 'src/app.jsx' : 'src/index.jsx',
       formats: ['es'],
-      fileName: () => 'index.js',
+      fileName: () => (isApp ? 'app.js' : 'index.js'),
     },
     rollupOptions: {
       output: {
