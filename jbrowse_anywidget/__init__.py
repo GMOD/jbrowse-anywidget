@@ -31,17 +31,34 @@ view is one flat, config-free call::
 name or extra config; a `(uri, index)` pair names a non-sibling index inline.
 """
 
+from __future__ import annotations
+
 import json
 import re
+import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Union
 
 import anywidget
 import traitlets
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+    import pandas as pd
+
 _STATIC = Path(__file__).parent / "static"
 
 __all__ = ["LinearGenomeView", "track", "make_assembly", "fetch_hub"]
+
+# A JBrowse config object (assembly, track, adapter, …): plain JSON as a dict.
+JsonDict = dict[str, Any]
+# A `tracks=[...]` entry: a full/loose config dict, a bare data-file URI, or a
+# `(uri, index)` pair.
+TrackEntry = Union[str, "tuple[str, str]", JsonDict]
+# What `add_features` accepts: a pandas DataFrame or a sequence of row mappings.
+FeatureSource = Union["pd.DataFrame", "Iterable[Mapping[str, Any]]"]
 
 
 class LinearGenomeView(anywidget.AnyWidget):
@@ -72,12 +89,12 @@ class LinearGenomeView(anywidget.AnyWidget):
 
     def __init__(
         self,
-        assembly=None,
-        location="",
-        tracks=None,
-        default_session=None,
-        **kwargs,
-    ):
+        assembly: str | JsonDict | None = None,
+        location: str = "",
+        tracks: list[TrackEntry] | None = None,
+        default_session: JsonDict | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         if assembly is not None:
             self.assembly = assembly
@@ -88,7 +105,7 @@ class LinearGenomeView(anywidget.AnyWidget):
         if location:
             self.location = location
 
-    def add_track(self, track):
+    def add_track(self, track: TrackEntry) -> None:
         """Add a track and open it in the view.
 
         `track` is anything a `tracks=[...]` entry can be: a bare data-file URI,
@@ -107,12 +124,12 @@ class LinearGenomeView(anywidget.AnyWidget):
 
     def add_features(
         self,
-        features,
-        name="features",
-        track_id=None,
-        assembly_name=None,
-        color=None,
-    ):
+        features: FeatureSource,
+        name: str = "features",
+        track_id: str | None = None,
+        assembly_name: str | None = None,
+        color: str | None = None,
+    ) -> None:
         """Add an in-memory feature track from a pandas DataFrame or list of dicts.
 
         This is the analysis-ready path — the one thing JSON config can't do
@@ -144,7 +161,7 @@ class LinearGenomeView(anywidget.AnyWidget):
             ]
         self.add_track(track)
 
-    def _resolved_assembly_name(self):
+    def _resolved_assembly_name(self) -> str | None:
         # A config dict carries its name under "name". A string is either a
         # sequence-file URL the view builds an assembly from (name derived from
         # the file, matching makeAssembly) or a hub name that is itself the
@@ -157,14 +174,14 @@ class LinearGenomeView(anywidget.AnyWidget):
             return self.assembly
         return self.assembly.get("name") or None
 
-    def _assembly_name(self, assembly_name):
+    def _assembly_name(self, assembly_name: str | None) -> str:
         name = assembly_name or self._resolved_assembly_name()
         if not name:
             raise ValueError("no assembly set; pass assembly_name=")
         return name
 
     @traitlets.validate("tracks")
-    def _normalize_tracks(self, proposal):
+    def _normalize_tracks(self, proposal: Any) -> list[JsonDict]:
         # Each entry is a full JBrowse track config dict, a bare data-file URI,
         # or a (uri, index) pair — so tracks=["a.bw", ("s.bam", "s.bai")] just
         # works; the bare/pair forms become loose {"uri": ...} specs the view
@@ -182,13 +199,13 @@ class LinearGenomeView(anywidget.AnyWidget):
 
 
 def make_assembly(
-    name,
-    fasta_uri,
-    fai_uri=None,
-    gzi_uri=None,
-    aliases=None,
-    refname_aliases_uri=None,
-):
+    name: str,
+    fasta_uri: str,
+    fai_uri: str | None = None,
+    gzi_uri: str | None = None,
+    aliases: list[str] | None = None,
+    refname_aliases_uri: str | None = None,
+) -> JsonDict:
     """Build an assembly config dict for an (optionally bgzipped) indexed FASTA.
 
     A convenience over writing the assembly JSON by hand; the return value is a
@@ -231,7 +248,7 @@ def make_assembly(
     return assembly
 
 
-def _normalize_track(item):
+def _normalize_track(item: TrackEntry) -> JsonDict:
     """Expand a `tracks=[...]` entry to a loose spec the view can consume.
 
     A bare data-file URI or a `(uri, index)` pair becomes `{"uri": ...}`; a dict
@@ -245,7 +262,14 @@ def _normalize_track(item):
     return item
 
 
-def track(uri, name=None, track_id=None, assembly_name=None, index=None, **extra):
+def track(
+    uri: str,
+    name: str | None = None,
+    track_id: str | None = None,
+    assembly_name: str | None = None,
+    index: str | None = None,
+    **extra: Any,
+) -> JsonDict:
     """Describe a track by its data-file URI (the declarative shorthand).
 
     Returns a loose spec — `{"uri": uri}` plus whatever you pass — that the view
@@ -281,7 +305,7 @@ def track(uri, name=None, track_id=None, assembly_name=None, index=None, **extra
     return spec
 
 
-def _to_features(features, track_id):
+def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:
     rows = _rows(features)
     out = []
     for i, row in enumerate(rows):
@@ -297,14 +321,14 @@ def _to_features(features, track_id):
     return out
 
 
-def _rows(features):
+def _rows(features: FeatureSource) -> list[JsonDict]:
     # Accept a pandas DataFrame without importing pandas as a hard dependency.
     if hasattr(features, "to_dict"):
         return features.to_dict(orient="records")
     return list(features)
 
 
-def _slug(text):
+def _slug(text: str) -> str:
     return "".join(c if c.isalnum() else "-" for c in str(text).lower()).strip("-")
 
 
@@ -313,16 +337,16 @@ def _slug(text):
 _SEQUENCE_EXT_RE = re.compile(r"\.(fa|fasta|fas|fna|mfa|2bit)(\.b?gz)?$", re.I)
 
 
-def _clean_uri(uri):
+def _clean_uri(uri: str) -> str:
     return re.split(r"[?#]", uri, maxsplit=1)[0]
 
 
-def _is_sequence_uri(uri):
+def _is_sequence_uri(uri: str) -> bool:
     # true when a string names a sequence file (vs. a hub name like "hg38")
     return bool(_SEQUENCE_EXT_RE.search(_clean_uri(uri)))
 
 
-def _assembly_name_from_uri(uri):
+def _assembly_name_from_uri(uri: str) -> str:
     # strip path and sequence extension: ".../hg19.fa.gz" -> "hg19"
     return _SEQUENCE_EXT_RE.sub("", _clean_uri(uri).rstrip("/").rsplit("/", 1)[-1])
 
@@ -330,7 +354,7 @@ def _assembly_name_from_uri(uri):
 _GENOMES = "https://jbrowse.org"
 
 
-def fetch_hub(hub):
+def fetch_hub(hub: str) -> JsonDict:
     """Fetch a hosted assembly config from jbrowse.org.
 
     `hub` is a UCSC database name (``hg38``, ``hg19``, ``mm10``, …) or a GenArk
@@ -367,7 +391,7 @@ def fetch_hub(hub):
     return config
 
 
-def _stamp_base_uri(node, base):
+def _stamp_base_uri(node: Any, base: str) -> None:
     if isinstance(node, dict):
         if "uri" in node and "baseUri" not in node:
             node["baseUri"] = base
