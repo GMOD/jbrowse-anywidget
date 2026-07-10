@@ -62,17 +62,21 @@ view            # display
 view.location   # read back the user's current region
 ```
 
-Extensions recognized: `.bam`, `.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`,
-`.vcf.gz`, `.gff.gz`/`.gff3.gz`, `.gtf.gz`, `.bed.gz`, and `.hic`; the index
-defaults to the conventional sibling (`.bai`/`.crai`/`.tbi`). When your index
-lives elsewhere — or is a `.csi` index — give a `(url, index)` pair instead of a
-bare string. `assemblyNames` is filled from the view's assembly, so a
+The track type and adapter are inferred from the file extension by the view
+itself — using JBrowse's own format plugins, the same inference the "Add track"
+flow uses — so there's no extension table in Python to fall behind: `.bam`,
+`.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`, `.vcf`(`.gz`), `.gff`(`.gz`)/`.gff3`(`.gz`),
+`.gtf`(`.gz`), `.bed`(`.gz`), `.hic`, and anything else a bundled plugin knows.
+The index defaults to the conventional sibling (`.bai`/`.crai`/`.tbi`); when your
+index lives elsewhere — or is a `.csi` index — give a `(url, index)` pair instead
+of a bare string. `assemblyNames` is filled from the view's assembly, so a
 `tracks=[...]` list needs no per-track boilerplate.
 
-`track(uri, name=..., ...)` is the same expansion made explicit — reach for it to
-set a display name or extra config. It returns a plain JBrowse config dict, so
-anything past the defaults (colors, display settings) is just a key you add — the
-same JBrowse config JSON, not a Python wrapper around it:
+`track(uri, name=..., ...)` is the same thing made explicit — reach for it to set
+a display name or extra config. It returns a loose spec (`{"uri": ...}` plus
+whatever you pass) that the view expands, so anything past the defaults (colors,
+display settings, even a `type=` override) is just a keyword you add — the same
+JBrowse config JSON, not a Python wrapper around it:
 
 ```python
 from jbrowse_anywidget import track
@@ -97,12 +101,17 @@ view.add_track({
 view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
 ```
 
-Python adds only what config JSON can't express itself: `track` (URI → track
-config), `add_features` (DataFrame/list of dicts → track) and `make_assembly` (a
-little assembly boilerplate). Everything else is `add_track(<config dict>)` — or
+Python adds only what config JSON can't express itself: `track` (URI → loose
+spec the view expands), `add_features` (DataFrame/list of dicts → track) and
+`make_assembly` (a little assembly boilerplate). Everything else is `add_track(<config dict>)` — or
 pass whole `tracks=[...]` / `default_session={...}` configs to the constructor.
 Tracks are opened in the view automatically; removing one from `view.tracks`
 closes it.
+
+For a custom genome, `assembly=` also accepts a bare sequence-file URL
+(`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly from
+it, deriving the name from the file — so `make_assembly` is only needed to add
+reference-name aliases or a non-sibling index.
 
 For human/model-organism data, `fetch_hub("hg38")` (also `hg19`, `mm10`, a
 GenArk `GCA_...`) returns a ready, CORS-enabled assembly config from

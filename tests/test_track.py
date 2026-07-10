@@ -1,138 +1,68 @@
-"""Tests for the declarative track() shorthand and assemblyNames backfill."""
+"""Tests for the declarative track() shorthand and assemblyNames backfill.
 
-import pytest
+Track-type/adapter inference now lives in JBrowse core: the view expands a loose
+`{uri, index?, ...}` spec at display time via the same format plugins the
+"Add track" flow uses. So these tests cover only the Python-side spec building
+and the assemblyNames backfill — the extension inference itself is core's, and
+core owns those tests.
+"""
 
 from jbrowse_anywidget import LinearGenomeView, track
 
 
-@pytest.mark.parametrize(
-    ("uri", "track_type", "adapter_type"),
-    [
-        ("https://x.org/reads.bam", "AlignmentsTrack", "BamAdapter"),
-        ("https://x.org/reads.cram", "AlignmentsTrack", "CramAdapter"),
-        ("https://x.org/sig.bw", "QuantitativeTrack", "BigWigAdapter"),
-        ("https://x.org/sig.bigwig", "QuantitativeTrack", "BigWigAdapter"),
-        ("https://x.org/genes.bb", "FeatureTrack", "BigBedAdapter"),
-        ("https://x.org/genes.bigbed", "FeatureTrack", "BigBedAdapter"),
-        ("https://x.org/vars.vcf.gz", "VariantTrack", "VcfTabixAdapter"),
-        ("https://x.org/genes.gff.gz", "FeatureTrack", "Gff3TabixAdapter"),
-        ("https://x.org/genes.gff3.gz", "FeatureTrack", "Gff3TabixAdapter"),
-        ("https://x.org/peaks.bed.gz", "FeatureTrack", "BedTabixAdapter"),
-        ("https://x.org/contact.hic", "HicTrack", "HicAdapter"),
-    ],
-)
-def test_infers_track_and_adapter_from_extension(uri, track_type, adapter_type):
-    t = track(uri)
-    assert t["type"] == track_type
-    assert t["adapter"]["type"] == adapter_type
-    assert "assemblyNames" not in t
+def test_track_is_a_loose_uri_spec():
+    assert track("https://x.org/reads.bam") == {"uri": "https://x.org/reads.bam"}
 
 
-def test_name_and_track_id_default_to_basename():
-    t = track("https://x.org/data/my.reads.cram")
-    assert t["name"] == "my.reads.cram"
-    assert t["trackId"] == "my-reads-cram"
-
-
-def test_explicit_name_and_track_id():
-    t = track("https://x.org/r.bam", name="Reads", track_id="reads")
-    assert t["name"] == "Reads"
-    assert t["trackId"] == "reads"
-
-
-def test_uri_shorthand_by_default():
-    # with no explicit index, lean on JBrowse's own `uri` shorthand so the
-    # adapter derives its .bai/.crai/.tbi sibling itself
-    assert track("https://x.org/r.bam")["adapter"] == {
-        "type": "BamAdapter",
+def test_track_carries_name_track_id_and_index():
+    assert track(
+        "https://x.org/r.bam",
+        name="Reads",
+        track_id="reads",
+        index="https://x.org/other.bai",
+    ) == {
         "uri": "https://x.org/r.bam",
-    }
-    assert track("https://x.org/r.cram")["adapter"] == {
-        "type": "CramAdapter",
-        "uri": "https://x.org/r.cram",
-    }
-    assert track("https://x.org/v.vcf.gz")["adapter"] == {
-        "type": "VcfTabixAdapter",
-        "uri": "https://x.org/v.vcf.gz",
+        "name": "Reads",
+        "trackId": "reads",
+        "index": "https://x.org/other.bai",
     }
 
 
-def test_explicit_index_uses_longhand_slots():
-    # the uri shorthand rebuilds the index from uri and would clobber the
-    # override, so an explicit index switches to the full location slots
-    bam = track("https://x.org/r.bam", index="https://x.org/other.bai")["adapter"]
-    assert bam["bamLocation"]["uri"] == "https://x.org/r.bam"
-    assert bam["index"]["location"]["uri"] == "https://x.org/other.bai"
-    assert bam["index"]["indexType"] == "BAI"
-    assert "uri" not in bam
-    cram = track("https://x.org/r.cram", index="https://x.org/other.crai")["adapter"]
-    assert cram["cramLocation"]["uri"] == "https://x.org/r.cram"
-    assert cram["craiLocation"]["uri"] == "https://x.org/other.crai"
+def test_track_extra_config_rides_along():
+    assert track(
+        "https://x.org/peaks.bed.gz", category=["Genes"], type="FeatureTrack"
+    ) == {
+        "uri": "https://x.org/peaks.bed.gz",
+        "category": ["Genes"],
+        "type": "FeatureTrack",
+    }
 
 
-def test_csi_index_detected_by_extension():
-    t = track("https://x.org/v.vcf.gz", index="https://x.org/v.vcf.gz.csi")
-    assert t["adapter"]["index"]["indexType"] == "CSI"
-    assert t["adapter"]["index"]["location"]["uri"] == "https://x.org/v.vcf.gz.csi"
+def test_track_assembly_name_sets_assembly_names():
+    assert track("https://x.org/r.bam", assembly_name="hg38")["assemblyNames"] == [
+        "hg38"
+    ]
 
 
-def test_index_on_unindexed_format_raises():
-    with pytest.raises(ValueError, match="no index file"):
-        track("https://x.org/sig.bw", index="https://x.org/sig.bw.idx")
-
-
-def test_gtf_tabix_inferred():
-    t = track("https://x.org/genes.gtf.gz")
-    assert t["type"] == "FeatureTrack"
-    assert t["adapter"]["type"] == "GtfTabixAdapter"
-
-
-@pytest.mark.parametrize(
-    ("uri", "adapter_type"),
-    [
-        ("https://x.org/g.gff.gz", "Gff3TabixAdapter"),
-        ("https://x.org/g.gff", "Gff3Adapter"),
-        ("https://x.org/g.gtf.gz", "GtfTabixAdapter"),
-        ("https://x.org/g.gtf", "GtfAdapter"),
-        ("https://x.org/r.bed.gz", "BedTabixAdapter"),
-        ("https://x.org/r.bed", "BedAdapter"),
-        ("https://x.org/v.vcf.gz", "VcfTabixAdapter"),
-        ("https://x.org/v.vcf", "VcfAdapter"),
-    ],
-)
-def test_plain_vs_bgzipped_adapter(uri, adapter_type):
-    # bgzipped -> indexed tabix adapter; plain -> whole-file in-memory adapter
-    assert track(uri)["adapter"]["type"] == adapter_type
-
-
-def test_unknown_extension_raises():
-    with pytest.raises(ValueError, match="can't infer"):
-        track("https://x.org/mystery.xyz")
-
-
-def test_query_string_ignored_when_inferring():
-    t = track("https://x.org/r.bam?token=abc")
-    assert t["adapter"]["type"] == "BamAdapter"
-    assert t["adapter"]["uri"] == "https://x.org/r.bam?token=abc"
-
-
-def test_bare_uri_track_entry_expanded():
+def test_bare_uri_track_entry_becomes_loose_spec():
     view = LinearGenomeView(assembly="hg38", tracks=["https://x.org/r.cram"])
     (t,) = view.tracks
-    assert t["adapter"] == {"type": "CramAdapter", "uri": "https://x.org/r.cram"}
-    assert t["assemblyNames"] == ["hg38"]
+    assert t == {"uri": "https://x.org/r.cram", "assemblyNames": ["hg38"]}
 
 
-def test_uri_index_pair_track_entry_expanded():
+def test_uri_index_pair_track_entry_becomes_loose_spec():
     view = LinearGenomeView(
         assembly="hg38", tracks=[("https://x.org/r.bam", "https://x.org/r.bam.bai")]
     )
     (t,) = view.tracks
-    assert t["adapter"]["bamLocation"]["uri"] == "https://x.org/r.bam"
-    assert t["adapter"]["index"]["location"]["uri"] == "https://x.org/r.bam.bai"
+    assert t == {
+        "uri": "https://x.org/r.bam",
+        "index": "https://x.org/r.bam.bai",
+        "assemblyNames": ["hg38"],
+    }
 
 
-def test_track_config_dict_entry_passed_through():
+def test_track_config_dict_entry_passed_through_with_backfill():
     conf = {
         "type": "AlignmentsTrack",
         "trackId": "custom",
@@ -144,18 +74,8 @@ def test_track_config_dict_entry_passed_through():
     assert view.tracks[0]["assemblyNames"] == ["hg38"]
 
 
-def test_assembly_names_backfilled_from_hub_name():
-    view = LinearGenomeView(
-        assembly="hg38",
-        tracks=[track("https://x.org/r.cram"), track("https://x.org/s.bw")],
-    )
-    assert all(t["assemblyNames"] == ["hg38"] for t in view.tracks)
-
-
-def test_assembly_names_backfilled_from_config_dict():
-    view = LinearGenomeView(
-        assembly={"name": "volvox"}, tracks=[track("https://x.org/r.bam")]
-    )
+def test_assembly_names_backfilled_from_config_dict_name():
+    view = LinearGenomeView(assembly={"name": "volvox"}, tracks=["https://x.org/r.bam"])
     assert view.tracks[0]["assemblyNames"] == ["volvox"]
 
 
@@ -170,3 +90,19 @@ def test_explicit_assembly_name_not_overwritten():
         assembly="hg38", tracks=[track("https://x.org/r.bam", assembly_name="other")]
     )
     assert view.tracks[0]["assemblyNames"] == ["other"]
+
+
+def test_sequence_url_assembly_backfills_derived_name():
+    # a bare FASTA URL as assembly= builds an assembly named after the file (the
+    # view's makeAssembly does the same), so backfilled tracks must match
+    view = LinearGenomeView(
+        assembly="https://x.org/data/hg38.fa.gz?t=1", tracks=["https://x.org/r.bam"]
+    )
+    assert view.tracks[0]["assemblyNames"] == ["hg38"]
+
+
+def test_hub_name_assembly_still_backfills_verbatim():
+    view = LinearGenomeView(
+        assembly="GCF_000001405.40", tracks=["https://x.org/r.bam"]
+    )
+    assert view.tracks[0]["assemblyNames"] == ["GCF_000001405.40"]
