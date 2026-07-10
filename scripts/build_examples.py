@@ -42,6 +42,11 @@ def save(name, cells):
         "language": "python",
         "name": "python3",
     }
+    # Deterministic cell ids so regenerating only diffs cells that changed;
+    # new_code_cell/new_markdown_cell otherwise mint a random id every run.
+    stem = name.removesuffix(".ipynb")
+    for i, cell in enumerate(nb.cells):
+        cell["id"] = f"{stem}-{i}"
     with open(f"examples/{name}", "w") as f:
         nbf.write(nb, f)
     print("wrote examples/" + name)
@@ -65,7 +70,7 @@ save(
             "indexed (here bgzipped) FASTA. `location` sets the opening region."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
+            'from jbrowse_anywidget import LinearGenomeView, make_assembly, track\n\n'
             'hg38 = make_assembly(\n'
             '    "hg38",\n'
             '    "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
@@ -76,23 +81,20 @@ save(
         ),
         new_markdown_cell(
             "## Add a track\n\n"
-            "`add_track` takes a [JBrowse track "
-            "config](https://jbrowse.org/jb2/docs/config_guide/#tracks) — the "
-            "same JSON you'd write in a config file — so every track type and "
-            "adapter is available directly. Here, a conservation bigwig."
+            "A bare data-file URL is a track — its type and adapter are inferred "
+            "from the extension, the way [@jbrowse/img](https://jbrowse.org/jb2/docs/jbrowse-img)'s "
+            "`--bam`/`--bigwig`/`--cram` flags work for the CLI. `track(uri, name=...)` "
+            "is the same expansion with a display name and room for extra config; "
+            "`assemblyNames` is filled in from the view's assembly. Here, a "
+            "conservation bigwig. Any non-default setting (color, height, ...) is "
+            "a key you add to the returned config dict."
         ),
         new_code_cell(
             'view.add_track(\n'
-            '    {\n'
-            '        "type": "QuantitativeTrack",\n'
-            '        "trackId": "phyloP100way",\n'
-            '        "name": "phyloP100way",\n'
-            '        "assemblyNames": ["hg38"],\n'
-            '        "adapter": {\n'
-            '            "type": "BigWigAdapter",\n'
-            '            "uri": "https://hgdownload.cse.ucsc.edu/goldenpath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
-            '        },\n'
-            '    }\n'
+            '    track(\n'
+            '        "https://hgdownload.cse.ucsc.edu/goldenpath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            '        name="phyloP100way",\n'
+            '    )\n'
             ')'
         ),
         new_markdown_cell(

@@ -42,34 +42,43 @@ Regenerate the notebooks with `python scripts/build_examples.py`.
 
 ## API sketch
 
-A whole view is one declarative call. `track(uri)` infers the track type and
-adapter from the file extension — the shorthand `@jbrowse/img`'s
-`--bam`/`--bigwig`/`--cram` flags give the CLI — and `assembly="hg38"` fetches a
-hosted genome by name, so nothing but URLs is needed:
+A whole view is one declarative call. A `tracks=[...]` entry can be a bare
+data-file URL — its track type and adapter are inferred from the extension — and
+`assembly="hg38"` fetches a hosted genome by name, so nothing but URLs is needed:
 
 ```python
-from jbrowse_anywidget import LinearGenomeView, track
+from jbrowse_anywidget import LinearGenomeView
 
 view = LinearGenomeView(
     assembly="hg38",
     location="10:29,838,565..29,838,850",
     tracks=[
-        track("https://.../ncbiRefSeq.sort.gff.gz"),
-        track("https://.../phyloP100way.bw"),
-        track("https://.../reads.cram"),
+        "https://.../ncbiRefSeq.sort.gff.gz",
+        "https://.../phyloP100way.bw",
+        "https://.../reads.cram",
     ],
 )
 view            # display
 view.location   # read back the user's current region
 ```
 
-`track` recognizes `.bam`, `.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`, `.vcf.gz`,
-`.gff.gz`/`.gff3.gz`, `.bed.gz`, and `.hic`; index locations default to the
-conventional sibling (`.bai`/`.crai`/`.tbi`, override with `index=`). It returns
-a plain config dict, and `assemblyNames` is filled from the view's assembly — so
-a `tracks=[...]` list needs no per-track boilerplate. Anything past the defaults
-(colors, display settings) is a key you add to that dict — the same JBrowse
-config JSON, not a Python wrapper around it.
+Extensions recognized: `.bam`, `.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`,
+`.vcf.gz`, `.gff.gz`/`.gff3.gz`, `.gtf.gz`, `.bed.gz`, and `.hic`; the index
+defaults to the conventional sibling (`.bai`/`.crai`/`.tbi`). When your index
+lives elsewhere — or is a `.csi` index — give a `(url, index)` pair instead of a
+bare string. `assemblyNames` is filled from the view's assembly, so a
+`tracks=[...]` list needs no per-track boilerplate.
+
+`track(uri, name=..., ...)` is the same expansion made explicit — reach for it to
+set a display name or extra config. It returns a plain JBrowse config dict, so
+anything past the defaults (colors, display settings) is just a key you add — the
+same JBrowse config JSON, not a Python wrapper around it:
+
+```python
+from jbrowse_anywidget import track
+
+view.add_track(track("https://.../reads.cram", name="Tumor"))
+```
 
 Under the shorthand it's all JBrowse's own config. Assemblies, tracks, and
 sessions are the same [JSON-like dicts](https://jbrowse.org/jb2/docs/config_guide/)
