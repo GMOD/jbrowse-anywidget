@@ -29,7 +29,7 @@ COLAB = "https://colab.research.google.com/assets/colab-badge.svg"
 
 
 def badge(path):
-    href = f"https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/{path}"
+    href = f"https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/{path}"
     return f"[![Open In Colab]({COLAB})]({href})"
 
 
