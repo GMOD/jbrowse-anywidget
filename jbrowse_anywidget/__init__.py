@@ -10,19 +10,23 @@ handed straight to the view. `assembly=` also accepts a hub name (``"hg38"``,
 can't express itself — turning an in-memory DataFrame into a track
 (`add_features`) and a little assembly boilerplate (`make_assembly`).
 
-For the common case, `track(uri)` infers the track type and adapter from the
-file extension — the declarative shorthand `@jbrowse/img`'s `--bam`/`--bigwig`
-flags give the CLI — so a whole view is one flat, config-free call::
+For the common case a bare data-file URI in `tracks=[...]` is enough — its
+track type and adapter are inferred from the extension (the declarative
+shorthand `@jbrowse/img`'s `--bam`/`--bigwig` flags give the CLI) — so a whole
+view is one flat, config-free call::
 
     view = LinearGenomeView(
         assembly="hg38",
         location="10:29,838,565..29,838,850",
         tracks=[
-            track("https://.../ncbiRefSeq.sort.gff.gz"),
-            track("https://.../phyloP100way.bw"),
-            track("https://.../reads.cram"),
+            "https://.../ncbiRefSeq.sort.gff.gz",
+            "https://.../phyloP100way.bw",
+            "https://.../reads.cram",
         ],
     )
+
+`track(uri)` is the same expansion made explicit, for when you want to set a
+name or extra config; a `(uri, index)` pair names a non-sibling index inline.
 """
 
 import json
@@ -82,12 +86,14 @@ class LinearGenomeView(anywidget.AnyWidget):
             self.location = location
 
     def add_track(self, track):
-        """Add a JBrowse track config dict; it opens in the view.
+        """Add a track and open it in the view.
 
-        `track` is any JBrowse track config — the same JSON you'd put in a
-        config file — so every track type and adapter works with no Python
-        wrapper. Pick one out of a `fetch_hub(...)` catalog, or write your own::
+        `track` is anything a `tracks=[...]` entry can be: a bare data-file URI,
+        a `(uri, index)` pair, or a full JBrowse track config dict — the same
+        JSON you'd put in a config file, so every track type and adapter works
+        with no Python wrapper. Pick one out of a `fetch_hub(...)` catalog, or::
 
+            view.add_track(".../reads.cram")
             view.add_track({
                 "type": "AlignmentsTrack", "trackId": "reads", "name": "reads",
                 "assemblyNames": ["hg38"],
@@ -149,19 +155,20 @@ class LinearGenomeView(anywidget.AnyWidget):
         return name
 
     @traitlets.validate("tracks")
-    def _fill_assembly_names(self, proposal):
-        # A track config needs assemblyNames, but making the caller repeat the
-        # assembly on every track() is noise — backfill it from the view's own
-        # assembly so tracks=[track(uri), ...] just works. Explicit
-        # assemblyNames (e.g. a synteny track) is left untouched.
+    def _normalize_tracks(self, proposal):
+        # Each entry is a JBrowse track config dict, a bare data-file URI (run
+        # through track()), or a (uri, index) pair — so tracks=["a.bw",
+        # ("s.bam", "s.bai")] just works. Then backfill assemblyNames from the
+        # view's own assembly, since repeating it on every track is noise; an
+        # explicit assemblyNames (e.g. a synteny track) is left untouched.
         name = self._resolved_assembly_name()
-        tracks = proposal["value"]
-        if name:
-            return [
-                t if t.get("assemblyNames") else {**t, "assemblyNames": [name]}
-                for t in tracks
-            ]
-        return tracks
+        out = []
+        for item in proposal["value"]:
+            conf = _normalize_track(item)
+            if name and not conf.get("assemblyNames"):
+                conf = {**conf, "assemblyNames": [name]}
+            out.append(conf)
+        return out
 
 
 def make_assembly(
@@ -181,13 +188,20 @@ def make_assembly(
     `1`-named reference — still lines up.
     """
     bgzipped = fasta_uri.endswith(".gz")
-    adapter = {
-        "type": "BgzipFastaAdapter" if bgzipped else "IndexedFastaAdapter",
-        "uri": fasta_uri,
-        "faiLocation": {"uri": fai_uri if fai_uri else fasta_uri + ".fai"},
-    }
-    if bgzipped:
-        adapter["gziLocation"] = {"uri": gzi_uri if gzi_uri else fasta_uri + ".gzi"}
+    adapter_type = "BgzipFastaAdapter" if bgzipped else "IndexedFastaAdapter"
+    if fai_uri or gzi_uri:
+        # a custom index location needs the longhand slots; the `uri` shorthand
+        # would derive (and override) faiLocation/gziLocation from the fasta uri
+        adapter = {
+            "type": adapter_type,
+            "fastaLocation": {"uri": fasta_uri},
+            "faiLocation": {"uri": fai_uri if fai_uri else fasta_uri + ".fai"},
+        }
+        if bgzipped:
+            adapter["gziLocation"] = {"uri": gzi_uri if gzi_uri else fasta_uri + ".gzi"}
+    else:
+        # JBrowse derives the .fai (and .gzi) sibling from `uri`
+        adapter = {"type": adapter_type, "uri": fasta_uri}
     assembly = {
         "name": name,
         "aliases": aliases if aliases else [],
@@ -207,61 +221,80 @@ def make_assembly(
     return assembly
 
 
-# Extension → adapter, the same map jb2export applies to its --bam/--bigwig/…
-# flags (products/jbrowse-img/src/makeConfigs.ts).
-def _index_type(index_uri, default):
-    return "CSI" if index_uri.endswith(".csi") else default
+# extension -> (track type, adapter type, location slot, default index type).
+# With no explicit index, JBrowse's `uri` shorthand derives the index sibling
+# (.bai/.crai/.tbi of `uri`) and, for CRAM, the reference from the assembly —
+# see each adapter's normalizeSnapshot in jbrowse-components — so the config is
+# just {"type": ..., "uri": uri}. The last field says how an explicit index
+# override is attached instead: "BAI"/"TBI" fill an `index` slot (default type,
+# switched to "CSI" for a .csi file), "crai" fills CramAdapter's craiLocation,
+# and None means the format carries no separate index file.
+_TRACK_TYPES = {
+    "bam": ("AlignmentsTrack", "BamAdapter", "bamLocation", "BAI"),
+    "cram": ("AlignmentsTrack", "CramAdapter", "cramLocation", "crai"),
+    "vcf": ("VariantTrack", "VcfTabixAdapter", "vcfGzLocation", "TBI"),
+    "gff": ("FeatureTrack", "Gff3TabixAdapter", "gffGzLocation", "TBI"),
+    "gff3": ("FeatureTrack", "Gff3TabixAdapter", "gffGzLocation", "TBI"),
+    "gtf": ("FeatureTrack", "GtfTabixAdapter", "gtfGzLocation", "TBI"),
+    "bed": ("FeatureTrack", "BedTabixAdapter", "bedGzLocation", "TBI"),
+    "bb": ("FeatureTrack", "BigBedAdapter", "bigBedLocation", None),
+    "bigbed": ("FeatureTrack", "BigBedAdapter", "bigBedLocation", None),
+    "bw": ("QuantitativeTrack", "BigWigAdapter", "bigWigLocation", None),
+    "bigwig": ("QuantitativeTrack", "BigWigAdapter", "bigWigLocation", None),
+    "hic": ("HicTrack", "HicAdapter", "hicLocation", None),
+}
+
+_SUPPORTED_EXTENSIONS = (
+    ".bam, .cram, .bw/.bigwig, .bb/.bigbed, .vcf.gz, .gff.gz/.gff3.gz, "
+    ".gtf.gz, .bed.gz, .hic"
+)
 
 
-def _infer_adapter(uri, index):
-    """Map a data-file URI to (track_type, adapter_dict) by extension."""
-    lower = uri.split("?")[0].split("#")[0].lower()
-    loc = {"uri": uri}
-    if lower.endswith(".bam"):
-        idx = index or uri + ".bai"
-        return "AlignmentsTrack", {
-            "type": "BamAdapter",
-            "bamLocation": loc,
-            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "BAI")},
-        }
-    if lower.endswith(".cram"):
-        return "AlignmentsTrack", {
-            "type": "CramAdapter",
-            "cramLocation": loc,
-            "craiLocation": {"uri": index or uri + ".crai"},
-        }
-    if lower.endswith((".bw", ".bigwig")):
-        return "QuantitativeTrack", {"type": "BigWigAdapter", "bigWigLocation": loc}
-    if lower.endswith((".bb", ".bigbed")):
-        return "FeatureTrack", {"type": "BigBedAdapter", "bigBedLocation": loc}
-    if lower.endswith(".hic"):
-        return "HicTrack", {"type": "HicAdapter", "hicLocation": loc}
-    if lower.endswith(".vcf.gz"):
-        idx = index or uri + ".tbi"
-        return "VariantTrack", {
-            "type": "VcfTabixAdapter",
-            "vcfGzLocation": loc,
-            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
-        }
-    if lower.endswith((".gff.gz", ".gff3.gz")):
-        idx = index or uri + ".tbi"
-        return "FeatureTrack", {
-            "type": "Gff3TabixAdapter",
-            "gffGzLocation": loc,
-            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
-        }
-    if lower.endswith(".bed.gz"):
-        idx = index or uri + ".tbi"
-        return "FeatureTrack", {
-            "type": "BedTabixAdapter",
-            "bedGzLocation": loc,
-            "index": {"location": {"uri": idx}, "indexType": _index_type(idx, "TBI")},
-        }
-    raise ValueError(
-        f"can't infer a track type from {uri!r}; supported extensions: "
-        ".bam, .cram, .bw/.bigwig, .bb/.bigbed, .vcf.gz, .gff.gz/.gff3.gz, "
-        ".bed.gz, .hic. For anything else write the track config dict directly."
-    )
+def _extension(uri):
+    # last extension, ignoring a trailing .gz and any query/fragment, so
+    # "genes.gff3.gz?token=x" -> "gff3" (mirrors JBrowseR's detect_track).
+    path = re.sub(r"\.gz$", "", uri.split("?", 1)[0].split("#", 1)[0], flags=re.I)
+    return path.rpartition(".")[2].lower()
+
+
+def _build_adapter(uri, index):
+    """Map a data-file URI (+ optional index) to (track_type, adapter_dict)."""
+    spec = _TRACK_TYPES.get(_extension(uri))
+    if spec is None:
+        raise ValueError(
+            f"can't infer a track type from {uri!r}; supported extensions: "
+            f"{_SUPPORTED_EXTENSIONS}. For anything else pass the track config "
+            "dict directly."
+        )
+    track_type, adapter_type, location_slot, index_default = spec
+    if index is None:
+        # let the adapter's uri shorthand derive its own index sibling
+        return track_type, {"type": adapter_type, "uri": uri}
+    if index_default is None:
+        raise ValueError(f"{adapter_type} ({uri!r}) has no index file; drop index=")
+    # the uri shorthand rebuilds the index from uri and would clobber the
+    # override, so name the data and index locations with the longhand slots
+    adapter = {"type": adapter_type, location_slot: {"uri": uri}}
+    if index_default == "crai":
+        adapter["craiLocation"] = {"uri": index}
+    else:
+        index_type = "CSI" if index.lower().endswith(".csi") else index_default
+        adapter["index"] = {"location": {"uri": index}, "indexType": index_type}
+    return track_type, adapter
+
+
+def _normalize_track(item):
+    """Expand a `tracks=[...]` entry to a full track config dict.
+
+    A bare data-file URI or a `(uri, index)` pair runs through `track()`; a dict
+    (a full JBrowse track config) is passed through untouched.
+    """
+    if isinstance(item, str):
+        return track(item)
+    if isinstance(item, (tuple, list)):
+        uri, index = item
+        return track(uri, index=index)
+    return item
 
 
 def track(uri, name=None, track_id=None, assembly_name=None, index=None):
@@ -269,16 +302,16 @@ def track(uri, name=None, track_id=None, assembly_name=None, index=None):
 
     The declarative shorthand — the Python analog of jbrowse-img's `--bam`,
     `--bigwig`, `--cram` flags. Recognizes .bam, .cram, .bw/.bigwig, .bb/.bigbed,
-    .vcf.gz, .gff.gz/.gff3.gz, .bed.gz, and .hic; index locations default to the
-    conventional sibling (.bai/.crai/.tbi) and `index=` overrides them (a `.csi`
-    index is detected by extension). Returns a plain JBrowse track config dict you
-    can hand to `tracks=[...]` or `add_track` — so anything beyond the defaults
-    (colors, display settings) is a key you add to it, the same JSON JBrowse's
-    config guide documents, not another Python wrapper. `assemblyNames` is filled
-    from the view's assembly when omitted, so `tracks=[track(uri), ...]` needs no
-    per-track assembly.
+    .vcf.gz, .gff.gz/.gff3.gz, .gtf.gz, .bed.gz, and .hic; index locations default
+    to the conventional sibling (.bai/.crai/.tbi) and `index=` overrides them (a
+    `.csi` index is detected by extension). Returns a plain JBrowse track config
+    dict you can hand to `tracks=[...]` or `add_track` — so anything beyond the
+    defaults (colors, display settings) is a key you add to it, the same JSON
+    JBrowse's config guide documents, not another Python wrapper. `assemblyNames`
+    is filled from the view's assembly when omitted, so `tracks=[track(uri), ...]`
+    needs no per-track assembly.
     """
-    track_type, adapter = _infer_adapter(uri, index)
+    track_type, adapter = _build_adapter(uri, index)
     name = name if name else _basename(uri)
     conf = {
         "type": track_type,

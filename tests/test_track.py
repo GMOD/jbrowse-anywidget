@@ -40,19 +40,51 @@ def test_explicit_name_and_track_id():
     assert t["trackId"] == "reads"
 
 
-def test_default_index_locations():
-    assert track("https://x.org/r.bam")["adapter"]["index"]["indexType"] == "BAI"
-    assert (
-        track("https://x.org/r.cram")["adapter"]["craiLocation"]["uri"]
-        == "https://x.org/r.cram.crai"
-    )
-    assert track("https://x.org/v.vcf.gz")["adapter"]["index"]["indexType"] == "TBI"
+def test_uri_shorthand_by_default():
+    # with no explicit index, lean on JBrowse's own `uri` shorthand so the
+    # adapter derives its .bai/.crai/.tbi sibling itself
+    assert track("https://x.org/r.bam")["adapter"] == {
+        "type": "BamAdapter",
+        "uri": "https://x.org/r.bam",
+    }
+    assert track("https://x.org/r.cram")["adapter"] == {
+        "type": "CramAdapter",
+        "uri": "https://x.org/r.cram",
+    }
+    assert track("https://x.org/v.vcf.gz")["adapter"] == {
+        "type": "VcfTabixAdapter",
+        "uri": "https://x.org/v.vcf.gz",
+    }
+
+
+def test_explicit_index_uses_longhand_slots():
+    # the uri shorthand rebuilds the index from uri and would clobber the
+    # override, so an explicit index switches to the full location slots
+    bam = track("https://x.org/r.bam", index="https://x.org/other.bai")["adapter"]
+    assert bam["bamLocation"]["uri"] == "https://x.org/r.bam"
+    assert bam["index"]["location"]["uri"] == "https://x.org/other.bai"
+    assert bam["index"]["indexType"] == "BAI"
+    assert "uri" not in bam
+    cram = track("https://x.org/r.cram", index="https://x.org/other.crai")["adapter"]
+    assert cram["cramLocation"]["uri"] == "https://x.org/r.cram"
+    assert cram["craiLocation"]["uri"] == "https://x.org/other.crai"
 
 
 def test_csi_index_detected_by_extension():
     t = track("https://x.org/v.vcf.gz", index="https://x.org/v.vcf.gz.csi")
     assert t["adapter"]["index"]["indexType"] == "CSI"
     assert t["adapter"]["index"]["location"]["uri"] == "https://x.org/v.vcf.gz.csi"
+
+
+def test_index_on_unindexed_format_raises():
+    with pytest.raises(ValueError, match="no index file"):
+        track("https://x.org/sig.bw", index="https://x.org/sig.bw.idx")
+
+
+def test_gtf_tabix_inferred():
+    t = track("https://x.org/genes.gtf.gz")
+    assert t["type"] == "FeatureTrack"
+    assert t["adapter"]["type"] == "GtfTabixAdapter"
 
 
 def test_unknown_extension_raises():
@@ -63,7 +95,35 @@ def test_unknown_extension_raises():
 def test_query_string_ignored_when_inferring():
     t = track("https://x.org/r.bam?token=abc")
     assert t["adapter"]["type"] == "BamAdapter"
-    assert t["adapter"]["bamLocation"]["uri"] == "https://x.org/r.bam?token=abc"
+    assert t["adapter"]["uri"] == "https://x.org/r.bam?token=abc"
+
+
+def test_bare_uri_track_entry_expanded():
+    view = LinearGenomeView(assembly="hg38", tracks=["https://x.org/r.cram"])
+    (t,) = view.tracks
+    assert t["adapter"] == {"type": "CramAdapter", "uri": "https://x.org/r.cram"}
+    assert t["assemblyNames"] == ["hg38"]
+
+
+def test_uri_index_pair_track_entry_expanded():
+    view = LinearGenomeView(
+        assembly="hg38", tracks=[("https://x.org/r.bam", "https://x.org/r.bam.bai")]
+    )
+    (t,) = view.tracks
+    assert t["adapter"]["bamLocation"]["uri"] == "https://x.org/r.bam"
+    assert t["adapter"]["index"]["location"]["uri"] == "https://x.org/r.bam.bai"
+
+
+def test_track_config_dict_entry_passed_through():
+    conf = {
+        "type": "AlignmentsTrack",
+        "trackId": "custom",
+        "name": "custom",
+        "adapter": {"type": "CramAdapter", "uri": "https://x.org/r.cram"},
+    }
+    view = LinearGenomeView(assembly="hg38", tracks=[conf])
+    assert view.tracks[0]["trackId"] == "custom"
+    assert view.tracks[0]["assemblyNames"] == ["hg38"]
 
 
 def test_assembly_names_backfilled_from_hub_name():
