@@ -337,7 +337,7 @@ def synteny_track(
             "type": "PAFAdapter",
             "targetAssembly": target_assembly,
             "queryAssembly": query_assembly,
-            "pafLocation": {"uri": uri},
+            "uri": uri,
         },
         **extra,
     }

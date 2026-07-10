@@ -57,7 +57,7 @@ def test_synteny_track_builds_a_paf_config():
             "type": "PAFAdapter",
             "targetAssembly": "hg38",
             "queryAssembly": "mm39",
-            "pafLocation": {"uri": "data/hg38_mm39.paf"},
+            "uri": "data/hg38_mm39.paf",
         },
     }
 

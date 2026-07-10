@@ -122,10 +122,13 @@ chromosomes differently (`chr17` vs `17`). See `examples/08_hosted_assembly_hub.
 
 ## Plots (GWAS Manhattan, and more)
 
-A track's *display* can plot its data — a `GWASTrack` with a
-`LinearManhattanDisplay` renders genome-wide summary statistics as a Manhattan
-plot right in the linear view. The plot is just a `displays` block on the track
-config, so it needs no special widget:
+A track's *display* can plot its data — a
+[`GWASTrack`](https://jbrowse.org/jb2/docs/config/gwasadapter/) with a
+[`LinearManhattanDisplay`](https://jbrowse.org/jb2/docs/config/linearmanhattandisplay/)
+renders genome-wide summary statistics as a Manhattan plot right in the linear
+view. The plot is just a `displays` block on the track config, so it needs no
+special widget. The adapter's `uri` shorthand finds the `.tbi` index for you, and
+JBrowse fills in `displayId`:
 
 ```python
 LinearGenomeView(
@@ -139,28 +142,27 @@ LinearGenomeView(
         "adapter": {
             "type": "GWASAdapter",
             "scoreColumn": "neg_log_pvalue",
-            "bedGzLocation": {"uri": ".../summary_stats.txt.gz"},
-            "index": {"location": {"uri": ".../summary_stats.txt.gz.tbi"}},
+            "uri": ".../summary_stats.txt.gz",
         },
-        "displays": [{
-            "type": "LinearManhattanDisplay",
-            "displayId": "gwas_track-manhattan",
-            "height": 250,
-        }],
+        "displays": [{"type": "LinearManhattanDisplay", "height": 250}],
     }],
 )
 ```
 
-The screenshot specs behind [jbrowse.org's docs](https://jbrowse.org/jb2/docs/)
-show many such display-driven plots (Manhattan/LD, Hi-C matrices, multi-wiggle,
-sashimi) — each is a track config plus a `displays` choice.
+JBrowse's [config guide](https://jbrowse.org/jb2/docs/config_guide/) and the
+per-type [config docs](https://jbrowse.org/jb2/docs/config/) cover many such
+display-driven plots (Manhattan/LD, Hi-C matrices, multi-wiggle, sashimi) — each
+is a track config plus a `displays` choice.
 
 ## Comparing genomes (synteny, dotplots)
 
 `LinearGenomeView` is one linear view. For comparative genomics, `JBrowseApp`
 drives the full app from a declarative `views=[...]` list — each entry a
-`{"type", "init"}` dict, built with `linear_view`, `synteny_view`, and
-`dotplot_view`:
+`{"type", "init"}` dict (the same shape as JBrowse Web's
+[`?session=spec-…` URLs](https://jbrowse.org/jb2/docs/urlparams/); the `init`
+fields come from the view's
+[state-model docs](https://jbrowse.org/jb2/docs/models/linearsyntenyview/)),
+built with `linear_view`, `synteny_view`, and `dotplot_view`:
 
 ```python
 from jbrowse_anywidget import JBrowseApp, synteny_view, synteny_track, make_assembly
