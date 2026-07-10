@@ -87,6 +87,24 @@ def test_gtf_tabix_inferred():
     assert t["adapter"]["type"] == "GtfTabixAdapter"
 
 
+@pytest.mark.parametrize(
+    ("uri", "adapter_type"),
+    [
+        ("https://x.org/g.gff.gz", "Gff3TabixAdapter"),
+        ("https://x.org/g.gff", "Gff3Adapter"),
+        ("https://x.org/g.gtf.gz", "GtfTabixAdapter"),
+        ("https://x.org/g.gtf", "GtfAdapter"),
+        ("https://x.org/r.bed.gz", "BedTabixAdapter"),
+        ("https://x.org/r.bed", "BedAdapter"),
+        ("https://x.org/v.vcf.gz", "VcfTabixAdapter"),
+        ("https://x.org/v.vcf", "VcfAdapter"),
+    ],
+)
+def test_plain_vs_bgzipped_adapter(uri, adapter_type):
+    # bgzipped -> indexed tabix adapter; plain -> whole-file in-memory adapter
+    assert track(uri)["adapter"]["type"] == adapter_type
+
+
 def test_unknown_extension_raises():
     with pytest.raises(ValueError, match="can't infer"):
         track("https://x.org/mystery.xyz")

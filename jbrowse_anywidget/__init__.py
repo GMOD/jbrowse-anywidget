@@ -244,10 +244,25 @@ _TRACK_TYPES = {
     "hic": ("HicTrack", "HicAdapter", "hicLocation", None),
 }
 
+# The same formats served plain (uncompressed) load through an in-memory
+# adapter with no index — used when the uri isn't bgzipped, so a plain ".gff"
+# or ".bed" resolves to the whole-file adapter instead of the tabix one above.
+_PLAIN_TYPES = {
+    "vcf": ("VariantTrack", "VcfAdapter", "vcfLocation", None),
+    "gff": ("FeatureTrack", "Gff3Adapter", "gffLocation", None),
+    "gff3": ("FeatureTrack", "Gff3Adapter", "gffLocation", None),
+    "gtf": ("FeatureTrack", "GtfAdapter", "gtfLocation", None),
+    "bed": ("FeatureTrack", "BedAdapter", "bedLocation", None),
+}
+
 _SUPPORTED_EXTENSIONS = (
-    ".bam, .cram, .bw/.bigwig, .bb/.bigbed, .vcf.gz, .gff.gz/.gff3.gz, "
-    ".gtf.gz, .bed.gz, .hic"
+    ".bam, .cram, .bw/.bigwig, .bb/.bigbed, .vcf(.gz), .gff(.gz)/.gff3(.gz), "
+    ".gtf(.gz), .bed(.gz), .hic"
 )
+
+
+def _is_bgzipped(uri):
+    return uri.split("?", 1)[0].split("#", 1)[0].lower().endswith(".gz")
 
 
 def _extension(uri):
@@ -257,9 +272,17 @@ def _extension(uri):
     return path.rpartition(".")[2].lower()
 
 
+def _track_spec(uri):
+    # tabix/indexed types when bgzipped; the plain in-memory adapter otherwise
+    ext = _extension(uri)
+    if not _is_bgzipped(uri) and ext in _PLAIN_TYPES:
+        return _PLAIN_TYPES[ext]
+    return _TRACK_TYPES.get(ext)
+
+
 def _build_adapter(uri, index):
     """Map a data-file URI (+ optional index) to (track_type, adapter_dict)."""
-    spec = _TRACK_TYPES.get(_extension(uri))
+    spec = _track_spec(uri)
     if spec is None:
         raise ValueError(
             f"can't infer a track type from {uri!r}; supported extensions: "
