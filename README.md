@@ -120,6 +120,41 @@ index, and a catalog of hosted tracks — as plain JSON you pass in. Because the
 assembly carries refName aliases, your own tracks line up even when they name
 chromosomes differently (`chr17` vs `17`). See `examples/08_hosted_assembly_hub.ipynb`.
 
+## Plots (GWAS Manhattan, and more)
+
+A track's *display* can plot its data — a `GWASTrack` with a
+`LinearManhattanDisplay` renders genome-wide summary statistics as a Manhattan
+plot right in the linear view. The plot is just a `displays` block on the track
+config, so it needs no special widget:
+
+```python
+LinearGenomeView(
+    assembly="hg19",
+    location="2",
+    tracks=[{
+        "type": "GWASTrack",
+        "trackId": "gwas_track",
+        "name": "GWAS",
+        "assemblyNames": ["hg19"],
+        "adapter": {
+            "type": "GWASAdapter",
+            "scoreColumn": "neg_log_pvalue",
+            "bedGzLocation": {"uri": ".../summary_stats.txt.gz"},
+            "index": {"location": {"uri": ".../summary_stats.txt.gz.tbi"}},
+        },
+        "displays": [{
+            "type": "LinearManhattanDisplay",
+            "displayId": "gwas_track-manhattan",
+            "height": 250,
+        }],
+    }],
+)
+```
+
+The screenshot specs behind [jbrowse.org's docs](https://jbrowse.org/jb2/docs/)
+show many such display-driven plots (Manhattan/LD, Hi-C matrices, multi-wiggle,
+sashimi) — each is a track config plus a `displays` choice.
+
 ## Comparing genomes (synteny, dotplots)
 
 `LinearGenomeView` is one linear view. For comparative genomics, `JBrowseApp`
