@@ -11,14 +11,14 @@ just a Vite-bundled ESM file loaded by anywidget.
 
 ## Try it in Colab
 
-- Quickstart — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)
-- DataFrame → track (analysis-ready) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
-- GPU alignments (BAM/CRAM) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)
-- Multi-sample variants — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)
-- Call CNVs → view them (ERBB2 amplification) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/05_cnv_calling.ipynb)
-- Selection scan (Fst) → view the sweep (LCT) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)
-- Differential expression → view — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)
-- Easy human data (hosted assembly hub) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/08_hosted_assembly_hub.ipynb)
+- Quickstart — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)
+- DataFrame → track (analysis-ready) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
+- GPU alignments (BAM/CRAM) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)
+- Multi-sample variants — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)
+- Call CNVs → view them (ERBB2 amplification) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_cnv_calling.ipynb)
+- Selection scan (Fst) → view the sweep (LCT) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)
+- Differential expression → view — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)
+- Easy human data (hosted assembly hub) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/08_hosted_assembly_hub.ipynb)
 
 05–07 are the core loop — **run an analysis in Python, load the result onto the
 genome** — with everything computed in the notebook (no downloads).
@@ -95,7 +95,7 @@ python -m build                  # sdist + wheel (includes static/)
 twine upload dist/*              # -> PyPI, so `pip install jbrowse-anywidget` works
 ```
 
-Then push to `github.com/cmdcolin/jbrowse-anywidget` and the Colab badges resolve.
+Then push to `github.com/GMOD/jbrowse-anywidget` and the Colab badges resolve.
 Colab renders the widget because each notebook enables the custom widget
 manager (`output.enable_custom_widget_manager()`).
 

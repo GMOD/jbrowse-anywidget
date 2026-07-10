@@ -17,7 +17,7 @@ INSTALL = """\
 try:
     import jbrowse_anywidget  # noqa: F401
 except ImportError:
-    %pip install -q "jbrowse-anywidget @ git+https://github.com/cmdcolin/jbrowse-anywidget" pandas numpy
+    %pip install -q "jbrowse-anywidget @ git+https://github.com/GMOD/jbrowse-anywidget" pandas numpy
 
 # Colab requires this to render third-party (anywidget) widgets:
 try:
@@ -31,7 +31,7 @@ COLAB = "https://colab.research.google.com/assets/colab-badge.svg"
 
 
 def badge(path):
-    href = f"https://colab.research.google.com/github/cmdcolin/jbrowse-anywidget/blob/main/examples/{path}"
+    href = f"https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/{path}"
     return f"[![Open In Colab]({COLAB})]({href})"
 
 
