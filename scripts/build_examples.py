@@ -664,4 +664,213 @@ save(
     ],
 )
 
+# --- 09 interactive controls ------------------------------------------------
+save(
+    "09_interactive_controls.ipynb",
+    [
+        new_markdown_cell(
+            "# Interactive controls: a slider that re-runs the analysis\n\n"
+            + badge("09_interactive_controls.ipynb")
+            + "\n\nThe view is wired to a live kernel, so a widget control can "
+            "**re-run the computation** and repaint the track — not just filter a "
+            "static file. Here an `ipywidgets` slider sets the significance "
+            "threshold for a differential-expression call; moving it "
+            "reclassifies every gene in Python and pushes the updated track. The "
+            "genome view and the control sit side by side, both driven from the "
+            "same notebook state."
+        ),
+        new_code_cell(INSTALL),
+        new_markdown_cell(
+            "## The analysis\n\n"
+            "The same small DE table as the DE example — genes with a log2 "
+            "fold-change and a p-value. `classify` is the part a slider re-runs: "
+            "it labels each gene up / down / not-significant at a chosen p-value "
+            "cutoff. Swap in your own DESeq2/edgeR table joined to coordinates."
+        ),
+        new_code_cell(
+            "import numpy as np\n"
+            "import pandas as pd\n\n"
+            "rng = np.random.default_rng(7)\n"
+            "n_genes, n_rep = 80, 4\n"
+            'chrom, gene_len, gap = "7", 6_000, 40_000\n'
+            "starts = 1_000_000 + np.arange(n_genes) * gap\n\n"
+            "base = rng.uniform(20, 400, n_genes)\n"
+            "true_lfc = np.zeros(n_genes)\n"
+            "up = rng.choice(n_genes, 6, replace=False)\n"
+            "down = rng.choice(np.setdiff1d(np.arange(n_genes), up), 6, replace=False)\n"
+            "true_lfc[up] = rng.uniform(1.5, 3.0, up.size)\n"
+            "true_lfc[down] = -rng.uniform(1.5, 3.0, down.size)\n\n"
+            "ctrl = rng.poisson(base[:, None], size=(n_genes, n_rep))\n"
+            "treat = rng.poisson((base * 2.0**true_lfc)[:, None], size=(n_genes, n_rep))\n"
+            "lc, lt = np.log2(ctrl + 1), np.log2(treat + 1)\n"
+            "lfc = lt.mean(1) - lc.mean(1)\n"
+            "se = np.sqrt(lc.var(1, ddof=1) / n_rep + lt.var(1, ddof=1) / n_rep)\n"
+            "t = np.divide(lfc, se, out=np.zeros_like(lfc), where=se > 0)\n"
+            "pval = np.exp(-0.717 * np.abs(t) - 0.416 * t**2)  # tail approx, no scipy\n\n"
+            "de = pd.DataFrame(\n"
+            "    {\n"
+            '        "chrom": chrom,\n'
+            '        "start": starts,\n'
+            '        "end": starts + gene_len,\n'
+            '        "name": [f"GENE{i:04d}" for i in range(n_genes)],\n'
+            '        "log2fc": lfc.round(2),\n'
+            '        "pvalue": pval,\n'
+            "    }\n"
+            ")\n\n\n"
+            "def classify(pvalue_cutoff, lfc_cutoff=1.0):\n"
+            "    sig = np.where(\n"
+            '        (de.pvalue < pvalue_cutoff) & (de.log2fc.abs() > lfc_cutoff),\n'
+            '        np.where(de.log2fc > 0, "up", "down"),\n'
+            '        "ns",\n'
+            "    )\n"
+            '    return de.assign(sig=sig)\n\n\n'
+            'classify(0.01).sig.value_counts()'
+        ),
+        new_markdown_cell(
+            "## Wire a slider to the view\n\n"
+            "`render` reruns `classify` at the slider's cutoff and replaces the "
+            "track (clearing first, so moving the slider repaints in place rather "
+            "than stacking tracks). `slider.observe` calls it on every change — "
+            "including a programmatic one, which is how this runs headless below. "
+            "Drag the slider and the genes recolor live."
+        ),
+        new_code_cell(
+            "import ipywidgets as widgets\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n"
+            "grch38 = make_assembly(\n"
+            '    "GRCh38",\n'
+            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    aliases=["hg38"],\n'
+            ")\n"
+            'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
+            'COLOR = "jexl:get(feature,\'sig\') == \'up\' ? \'#c62828\' : get(feature,\'sig\') == \'down\' ? \'#1565c0\' : \'#cfcfcf\'"\n\n\n'
+            "def render(pvalue_cutoff):\n"
+            "    view.tracks = []  # replace, don't stack\n"
+            "    view.add_features(\n"
+            '        classify(pvalue_cutoff),\n'
+            '        name=f"DE (p < {pvalue_cutoff:g})",\n'
+            '        track_id="de",\n'
+            "        color=COLOR,\n"
+            "    )\n\n\n"
+            "slider = widgets.FloatLogSlider(\n"
+            '    value=0.01, base=10, min=-4, max=-1, step=0.2, description="p <",\n'
+            ")\n"
+            'slider.observe(lambda change: render(change["new"]), "value")\n'
+            "render(slider.value)\n\n"
+            "widgets.VBox([slider, view])"
+        ),
+        new_markdown_cell(
+            "Setting the slider from code fires the same observer, so this "
+            "tightens the threshold and repaints the track without any manual "
+            "interaction:"
+        ),
+        new_code_cell(
+            "slider.value = 1e-4\n"
+            'print("significant now:", int((classify(slider.value).sig != "ns").sum()), "genes")'
+        ),
+    ],
+)
+
+# --- 10 region-reactive computed track --------------------------------------
+save(
+    "10_region_reactive.ipynb",
+    [
+        new_markdown_cell(
+            "# Region-reactive: compute only what's on screen\n\n"
+            + badge("10_region_reactive.ipynb")
+            + "\n\nThe view syncs its visible region back to Python, so you can "
+            "**observe `location` and recompute as the user pans** — the loop a "
+            "static browser can't close. Here a per-base score (stand-in for "
+            "coverage from a BAM, a motif scan, GC content, …) is computed only "
+            "over the window in view, at a bin size that adapts to the zoom "
+            "level. Nothing is precomputed genome-wide; the kernel answers for "
+            "exactly what's asked."
+        ),
+        new_code_cell(INSTALL),
+        new_markdown_cell(
+            "## The (expensive) per-base score\n\n"
+            "`score` stands in for something you would not want to run across a "
+            "whole genome up front — read depth from a `pysam` pileup, a PWM "
+            "scan, GC content. `compute_windows` evaluates it only between "
+            "`start` and `end` and bins to ~200 points across the view, so "
+            "zooming in *raises* the resolution instead of just cropping a "
+            "fixed-resolution file."
+        ),
+        new_code_cell(
+            "import numpy as np\n"
+            "import pandas as pd\n\n"
+            "# two peaks in the score landscape, to have something to find\n"
+            "PEAKS = [(29_845_000, 2500, 1.0), (29_905_000, 6000, 0.7)]\n\n\n"
+            "def score(pos):\n"
+            "    pos = np.asarray(pos, dtype=float)\n"
+            "    y = 0.12 * np.sin(pos / 700.0)  # background\n"
+            "    for center, width, height in PEAKS:\n"
+            "        y = y + height * np.exp(-0.5 * ((pos - center) / width) ** 2)\n"
+            "    return y\n\n\n"
+            "def compute_windows(chrom, start, end):\n"
+            "    span = max(end - start, 1)\n"
+            "    binsize = max(50, span // 200)  # ~200 bins across the view\n"
+            "    edges = np.arange(start, end, binsize)\n"
+            "    rows = [\n"
+            "        {\n"
+            '            "chrom": chrom,\n'
+            '            "start": int(edge),\n'
+            '            "end": int(min(edge + binsize, end)),\n'
+            '            "score": round(float(score(np.arange(edge, min(edge + binsize, end))).mean()), 3),\n'
+            "        }\n"
+            "        for edge in edges\n"
+            "    ]\n"
+            "    return pd.DataFrame(rows)\n\n\n"
+            'compute_windows("10", 29_838_000, 29_858_000).head()'
+        ),
+        new_markdown_cell(
+            "## Recompute on every pan\n\n"
+            "`on_location` parses the view's current locstring and re-renders the "
+            "computed track for that window. `view.observe(..., \"location\")` "
+            "fires it whenever the region changes — dragging in the UI, or "
+            "setting `view.location` from code. `parse_loc` returns `None` for a "
+            "gene-name or empty location, so those are simply skipped."
+        ),
+        new_code_cell(
+            "import re\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n"
+            "grch38 = make_assembly(\n"
+            '    "GRCh38",\n'
+            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    aliases=["hg38"],\n'
+            ")\n\n\n"
+            "def parse_loc(loc):\n"
+            '    m = re.match(r"^\\s*([^:\\s]+)\\s*:\\s*([\\d,]+)\\s*\\.\\.\\s*([\\d,]+)", loc or "")\n'
+            "    if not m:\n"
+            "        return None\n"
+            '    return m.group(1), int(m.group(2).replace(",", "")), int(m.group(3).replace(",", ""))\n\n\n'
+            "def render_region(chrom, start, end):\n"
+            "    view.tracks = []  # replace with the freshly computed window\n"
+            "    view.add_features(\n"
+            "        compute_windows(chrom, start, end),\n"
+            '        name="score (visible region)",\n'
+            '        track_id="signal",\n'
+            "        color=\"jexl:get(feature,'score') > 0.5 ? '#c62828' : get(feature,'score') > 0.25 ? '#f9a825' : '#90a4ae'\",\n"
+            "    )\n\n\n"
+            "def on_location(change):\n"
+            '    region = parse_loc(change["new"])\n'
+            "    if region:\n"
+            "        render_region(*region)\n\n\n"
+            'view = LinearGenomeView(assembly=grch38, location="10:29,838,000..29,858,000")\n'
+            'view.observe(on_location, "location")\n'
+            "render_region(*parse_loc(view.location))  # initial fill\n"
+            "view"
+        ),
+        new_markdown_cell(
+            "Driving `location` from code fires the observer, so the track "
+            "recomputes for the new window. Zooming out widens the bins; zooming "
+            "in sharpens them — the resolution follows the view:"
+        ),
+        new_code_cell(
+            'view.location = "10:29,890,000..29,920,000"  # zoom to the second peak\n'
+            "len(view.tracks[0][\"adapter\"][\"features\"]), \"bins computed for this window\""
+        ),
+    ],
+)
+
 print("done")
