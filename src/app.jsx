@@ -1,6 +1,7 @@
 import '@fontsource/roboto'
+import '@jbrowse/react-app2/styles.css'
 
-import { createApp } from '@jbrowse/embedded-app'
+import { createApp } from '@jbrowse/react-app2'
 
 // The multi-view widget's traits map straight onto createApp's declarative
 // options: assemblies + tracks are config lists, views is the [{type, init}]

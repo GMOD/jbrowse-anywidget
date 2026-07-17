@@ -1,6 +1,6 @@
 import '@fontsource/roboto'
 
-import { createLinearGenomeView } from '@jbrowse/embedded-linear-genome-view'
+import { createLinearGenomeView } from '@jbrowse/react-linear-genome-view2'
 
 function hasSession(model) {
   return Object.keys(model.get('default_session')).length > 0
