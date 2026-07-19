@@ -12,10 +12,10 @@ just a Vite-bundled ESM file loaded by anywidget.
 ## Try it in Colab
 
 - Quickstart — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)
-- DataFrame → track (analysis-ready) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
+- bioframe result → track (real CpG islands + shores) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
 - GPU alignments (BAM/CRAM) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)
 - Multi-sample variants — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)
-- Call CNVs → view them (ERBB2 amplification) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_cnv_calling.ipynb)
+- Read depth from a BAM with pysam (NA12878 exome over BRCA1) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_bam_coverage.ipynb)
 - Between-population selection scan (Fst) → view the sweep (Drosophila Cyp6g1, real DEST data) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)
 - Differential expression → view — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)
 - Easy human data (hosted assembly hub) — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/08_hosted_assembly_hub.ipynb)
@@ -24,9 +24,9 @@ just a Vite-bundled ESM file loaded by anywidget.
 - Compare genomes — four E. coli strains in a linear synteny view — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/11_synteny_ecoli.ipynb)
 
 05–07 are the core loop — **run an analysis in Python, load the result onto the
-genome** — with everything computed in the notebook (no downloads). 09–10 close
-the loop the other way: a widget control or a pan in the view drives Python to
-**recompute and repaint**, live.
+genome** — using the tools scientists already reach for (pysam, bioframe,
+scipy/statsmodels) on real data. 09–10 close the loop the other way: a widget
+control or a pan in the view drives Python to **recompute and repaint**, live.
 
 ## Develop
 
@@ -201,13 +201,13 @@ manager (`output.enable_custom_widget_manager()`).
 
 Prototype consolidating two earlier experiments
 (`experiments/jbrowse_lgv_widget`, `dont_care/jb2anywidget`), now bundling the
-GPU-rendered v4 view. All ten notebooks in `examples/` are verified to execute
-headless, and their track configs (bigwig, DataFrame, alignments, variants, CNV
-segments, Fst windows, differential expression, hosted hub tracks) are verified
-to render in a headless browser; the two interactive notebooks
-(slider-driven reanalysis, region-reactive recompute) drive Python from view
-state.
+GPU-rendered v4 view. The eleven notebooks in `examples/` run top-to-bottom in
+Colab; their analyses use the tools scientists already work in (bioframe
+intervals, pysam coverage, scipy/statsmodels DE, DEST Fst windows) on real data,
+and their track configs render in a headless browser. Two of them close the loop
+the other way — a slider and a pan in the view drive Python to recompute and
+repaint.
 
-Next: a matching synteny/dotplot widget (a different view type, so a separate
-component), a binary fast-path for large feature sets, and an R wrapper over the
-same bundle.
+Synteny and dotplot views ship today via `JBrowseApp` (see above), and
+[JBrowseR](https://github.com/GMOD/JBrowseR) wraps the same bundle for R. Next: a
+binary fast-path for large feature sets.

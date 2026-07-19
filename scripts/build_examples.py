@@ -9,7 +9,15 @@ install for verification.
 import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
-INSTALL = """\
+def install(extra=""):
+    """The first cell of every notebook: install in Colab, no-op locally.
+
+    `extra` names any analysis libraries the notebook uses beyond pandas/numpy
+    (e.g. "bioframe", "pysam", "scipy statsmodels") so the Colab install pulls
+    them too; a local editable checkout already has them and is used as-is.
+    """
+    pkgs = ("pandas numpy " + extra).strip()
+    return f"""\
 # Install only if not already available (e.g. in Colab). The GitHub install
 # needs no JS toolchain — the built widget bundle is committed in the repo. A
 # local editable install is used as-is. (Swap to `jbrowse-anywidget` once it's
@@ -17,7 +25,7 @@ INSTALL = """\
 try:
     import jbrowse_anywidget  # noqa: F401
 except ImportError:
-    %pip install -q "jbrowse-anywidget @ git+https://github.com/GMOD/jbrowse-anywidget" pandas numpy
+    %pip install -q "jbrowse-anywidget @ git+https://github.com/GMOD/jbrowse-anywidget" {pkgs}
 
 # Colab requires this to render third-party (anywidget) widgets:
 try:
@@ -63,7 +71,7 @@ save(
             "[anywidget](https://anywidget.dev), drawn on the GPU. Works in "
             "Jupyter, JupyterLab, VS Code, and Colab from a single bundle."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## An assembly and a view\n\n"
             "`make_assembly` builds the reference-sequence config for an "
@@ -112,43 +120,41 @@ save(
     "02_dataframe_analysis.ipynb",
     [
         new_markdown_cell(
-            "# Analysis-ready: a DataFrame becomes a track\n\n"
+            "# From a bioframe result to a track\n\n"
             + badge("02_dataframe_analysis.ipynb")
-            + "\n\nThe point of a notebook genome browser is to **see the "
-            "result of a computation in genomic context**. `add_features` turns "
-            "a pandas DataFrame straight into a track — no file written, no "
-            "server."
+            + "\n\n[bioframe](https://bioframe.readthedocs.io) is the "
+            "pandas-native toolkit for genomic intervals, and a bioframe frame is "
+            "just a DataFrame with `chrom`/`start`/`end`. That's exactly what "
+            "`add_features` takes — so any interval analysis you already do in "
+            "bioframe is **one call from the genome**, no file written."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install("bioframe")),
         new_markdown_cell(
-            "## Compute something\n\n"
-            "A stand-in analysis: sliding-window mean of a synthetic signal, "
-            "producing scored intervals. Swap this for your real pipeline "
-            "output — peaks, coverage, methylation — as long as it has "
-            "`refName`/`chrom`, `start`, `end` columns."
+            "## Real intervals, one real operation\n\n"
+            "UCSC's hg38 **CpG islands** (read straight from UCSC with pandas), "
+            "then their **shores** — the 2 kb flanks where most differential "
+            "methylation sits. In bioframe that's `expand` minus the islands, one "
+            "line. This assembly names chromosomes `17` (no `chr`), so match it."
         ),
         new_code_cell(
-            'import numpy as np\n'
+            'import bioframe as bf\n'
             'import pandas as pd\n\n'
-            'rng = np.random.default_rng(0)\n'
-            'start = 29_838_000\n'
-            'positions = np.arange(start, start + 2000)\n'
-            'signal = rng.normal(size=positions.size).cumsum()\n\n'
-            'win = 100\n'
-            'rows = []\n'
-            'for i in range(0, positions.size - win, win):\n'
-            '    rows.append(\n'
-            '        {\n'
-            '            "chrom": "10",\n'
-            '            "start": int(positions[i]),\n'
-            '            "end": int(positions[i + win]),\n'
-            '            "score": float(signal[i : i + win].mean()),\n'
-            '        }\n'
-            '    )\n\n'
-            'windows = pd.DataFrame(rows)\n'
-            'windows.head()'
+            'cols = "bin chrom start end name length cpgNum gcNum perCpg perGc obsExp".split()\n'
+            'islands = pd.read_csv(\n'
+            '    "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cpgIslandExt.txt.gz",\n'
+            '    sep="\\t", names=cols,\n'
+            ')\n'
+            'islands = islands[islands.chrom == "chr17"].assign(chrom="17")\n'
+            'shores = bf.merge(bf.subtract(bf.expand(islands, pad=2000), islands))\n'
+            'print(len(islands), "islands ->", len(shores), "shores")\n'
+            'shores.head()'
         ),
-        new_markdown_cell("## Visualize it in genomic context"),
+        new_markdown_cell(
+            "## Both on the genome\n\n"
+            "One `add_features` per frame. Islands are colored by GC% — a column "
+            "that rides along and shows in each feature's details; any column "
+            "does. This lands on *TP53*."
+        ),
         new_code_cell(
             'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
             'hg38 = make_assembly(\n'
@@ -156,32 +162,13 @@ save(
             '    "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
             '    aliases=["GRCh38"],\n'
             ')\n'
-            'view = LinearGenomeView(assembly=hg38, location="10:29,838,000..29,840,000")\n'
-            'view.add_features(windows, name="windowed mean")\n'
+            'view = LinearGenomeView(assembly=hg38, location="17:7,660,000..7,700,000")\n'
+            'view.add_features(\n'
+            '    islands, name="CpG islands (by GC%)",\n'
+            '    color="jexl:get(feature,\'perGc\') > 65 ? \'#00695c\' : \'#4db6ac\'",\n'
+            ')\n'
+            'view.add_features(shores, name="CpG shores", color="#f9a825")\n'
             'view'
-        ),
-        new_markdown_cell(
-            "Every column beyond `refName`/`start`/`end` is carried onto the "
-            "feature, so `score` (and any annotations you add) show up in the "
-            "feature details and can drive rendering."
-        ),
-        new_markdown_cell(
-            "## Color by a computed value\n\n"
-            "A feature's own columns are addressable from a "
-            "[jexl](https://jbrowse.org/jb2/docs/config_guides/customizing_feature_colors/) "
-            "color expression, so the track can encode `score` directly — high "
-            "windows in red, low in blue."
-        ),
-        new_code_cell(
-            'colored = LinearGenomeView(\n'
-            '    assembly=hg38, location="10:29,838,000..29,840,000"\n'
-            ')\n'
-            'colored.add_features(\n'
-            '    windows,\n'
-            '    name="windowed mean (colored)",\n'
-            '    color="jexl:get(feature,\'score\') > 0 ? \'#c62828\' : \'#1565c0\'",\n'
-            ')\n'
-            'colored'
         ),
     ],
 )
@@ -197,7 +184,7 @@ save(
             "coverage on the GPU, so deep regions stay smooth to pan and zoom. "
             "Here, the 1000 Genomes NA12878 exome (CRAM) over GRCh38."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## Assembly and alignments\n\n"
             "The CRAM's `.crai` index and its reference sequence are resolved "
@@ -268,7 +255,7 @@ save(
             "matrix — that's the display `type` — and a samples TSV lets you "
             "group and color samples by metadata."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## A per-sample band, colored by population\n\n"
             "`samplesTsvLocation` maps each sample to attributes (here "
@@ -329,106 +316,67 @@ save(
     ],
 )
 
-# --- 05 CNV calling ---------------------------------------------------------
+# --- 05 pysam read depth ----------------------------------------------------
 save(
-    "05_cnv_calling.ipynb",
+    "05_bam_coverage.ipynb",
     [
         new_markdown_cell(
-            "# Call CNVs, then see them in context\n\n"
-            + badge("05_cnv_calling.ipynb")
-            + "\n\nThe notebook loop: **run an analysis, drop the result onto "
-            "the genome.** Here we segment binned read-depth into "
-            "copy-number gains and losses, then load the calls as a track — no "
-            "file written. The synthetic depth carries a focal amplification at "
-            "*ERBB2* (HER2), the classic breast-cancer CNV."
+            "# Read depth from a BAM, straight from pysam\n\n"
+            + badge("05_bam_coverage.ipynb")
+            + "\n\n[pysam](https://pysam.readthedocs.io) is how Python reads BAM "
+            "and CRAM. `count_coverage` over a region, bin it, and `add_features` "
+            "puts it on the genome — no intermediate file, no bigWig conversion. "
+            "The data is the real 1000 Genomes **NA12878 exome** (a 17 GB BAM, "
+            "but pysam fetches only the index and the region you ask for)."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install("pysam")),
         new_markdown_cell(
-            "## The signal: binned log2 depth ratio\n\n"
-            "Stand-in for a tumor/normal coverage ratio over a stretch of "
-            "chr17. Swap it for your own binned depth (`cnvkit`, `mosdepth`, …) "
-            "as long as it has chrom/start/end and a log2 column."
+            "## Coverage over BRCA1\n\n"
+            "Open the remote BAM (its `.bai` is fetched automatically), sum the "
+            "per-base A/C/G/T counts, and average into 100 bp bins. This BAM is "
+            "aligned to GRCh37 and names the chromosome `17`; we relabel to "
+            "`chr17` to match the hg19 hub below."
         ),
         new_code_cell(
             'import numpy as np\n'
-            'import pandas as pd\n\n'
-            'rng = np.random.default_rng(0)\n'
-            'chrom, start, end, binsize = "17", 39_000_000, 40_200_000, 10_000\n'
-            'bin_starts = np.arange(start, end, binsize)\n'
-            'log2 = rng.normal(0, 0.25, size=bin_starts.size)\n\n'
-            '# a focal ERBB2/HER2 amplification, plus a nearby deletion\n'
-            'log2[(bin_starts >= 39_680_000) & (bin_starts < 39_740_000)] += 2.4\n'
-            'log2[(bin_starts >= 39_180_000) & (bin_starts < 39_260_000)] -= 1.4\n\n'
-            'bins = pd.DataFrame(\n'
-            '    {\n'
-            '        "chrom": chrom,\n'
-            '        "start": bin_starts,\n'
-            '        "end": bin_starts + binsize,\n'
-            '        "log2": log2.round(3),\n'
-            '    }\n'
+            'import pandas as pd\n'
+            'import pysam\n\n'
+            'BAM = (\n'
+            '    "https://s3.amazonaws.com/1000genomes/phase3/data/NA12878/"\n'
+            '    "exome_alignment/NA12878.mapped.ILLUMINA.bwa.CEU.exome.20121211.bam"\n'
             ')\n'
-            'bins.head()'
+            'CHROM, START, END = "17", 41_196_312, 41_277_500  # BRCA1, GRCh37\n\n'
+            'bam = pysam.AlignmentFile(BAM)\n'
+            'depth = np.array(bam.count_coverage(CHROM, START, END)).sum(0)\n\n'
+            'binsize = 100\n'
+            'n = depth.size // binsize * binsize\n'
+            'binned = depth[:n].reshape(-1, binsize).mean(1).round(1)\n'
+            'starts = START + np.arange(binned.size) * binsize\n'
+            'coverage = pd.DataFrame(\n'
+            '    {"chrom": "chr17", "start": starts, "end": starts + binsize, "depth": binned}\n'
+            ')\n'
+            'coverage.head()'
         ),
         new_markdown_cell(
-            "## Call segments\n\n"
-            "Smooth, threshold into gain/loss/neutral, and merge adjacent "
-            "like-state bins into segments — a toy segmenter standing in for "
-            "CBS/HMM."
+            "## See it on hg19, opened at the gene by name\n\n"
+            "`fetch_hub(\"hg19\")` brings the genome and a gene-name search index, "
+            "so `location=\"BRCA1\"` just works. Exome capture concentrates reads "
+            "on the exons — the depth track peaks there and drops between."
         ),
         new_code_cell(
-            'GAIN, LOSS = 0.4, -0.4\n'
-            'smooth = bins["log2"].rolling(5, center=True, min_periods=1).median().to_numpy()\n'
-            'state = np.where(smooth > GAIN, "gain", np.where(smooth < LOSS, "loss", "neutral"))\n\n'
-            'segments, i = [], 0\n'
-            'while i < len(bins):\n'
-            '    j = i\n'
-            '    while j + 1 < len(bins) and state[j + 1] == state[i]:\n'
-            '        j += 1\n'
-            '    if state[i] != "neutral":\n'
-            '        segments.append(\n'
-            '            {\n'
-            '                "chrom": chrom,\n'
-            '                "start": int(bins["start"][i]),\n'
-            '                "end": int(bins["end"][j]),\n'
-            '                "state": state[i],\n'
-            '                "mean_log2": round(float(smooth[i : j + 1].mean()), 2),\n'
-            '            }\n'
-            '        )\n'
-            '    i = j + 1\n\n'
-            'calls = pd.DataFrame(segments)\n'
-            'calls'
-        ),
-        new_markdown_cell(
-            "## Load signal + calls onto the genome\n\n"
-            "Two `add_features` tracks: the per-bin log2 (red gain / blue loss) "
-            "and the called segments on top. `color` is a jexl expression over "
-            "each feature's own columns."
-        ),
-        new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
-            'grch38 = make_assembly(\n'
-            '    "GRCh38",\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
-            '    aliases=["hg38"],\n'
-            ')\n'
-            'view = LinearGenomeView(assembly=grch38, location="17:39,000,000..40,200,000")\n'
-            'view.add_features(\n'
-            '    bins,\n'
-            '    name="log2 depth ratio",\n'
-            '    color="jexl:get(feature,\'log2\') > 0.4 ? \'#c62828\' : get(feature,\'log2\') < -0.4 ? \'#1565c0\' : \'#cfcfcf\'",\n'
+            'from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n'
+            'hg19 = fetch_hub("hg19")\n'
+            'view = LinearGenomeView(\n'
+            '    assembly=hg19["assemblies"][0],\n'
+            '    aggregate_text_search_adapters=hg19["aggregateTextSearchAdapters"],\n'
+            '    location="BRCA1",\n'
             ')\n'
             'view.add_features(\n'
-            '    calls,\n'
-            '    name="CNV calls",\n'
-            '    color="jexl:get(feature,\'state\') == \'gain\' ? \'#c62828\' : \'#1565c0\'",\n'
+            '    coverage, name="NA12878 exome depth",\n'
+            '    color="jexl:get(feature,\'depth\') > 40 ? \'#c62828\' : get(feature,\'depth\') > 10 ? \'#f9a825\' : \'#cfcfcf\'",\n'
             ')\n'
             'view'
         ),
-        new_markdown_cell(
-            "Zoom to *ERBB2* to land on the amplified segment (drives the view "
-            "from Python):"
-        ),
-        new_code_cell('view.location = "17:39,650,000..39,770,000"'),
     ],
 )
 
@@ -451,7 +399,7 @@ save(
             "bigWigs come from the same "
             "[population-genomics tutorial](https://jbrowse.org/jb2/docs/tutorials/population_genomics/#between-populations)."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## Compute windowed Fst\n\n"
             "Load the per-SNP African and cosmopolitan allele frequencies, then "
@@ -527,58 +475,57 @@ save(
             + badge("07_differential_expression.ipynb")
             + "\n\nAnother analysis→genome loop: run a small DE analysis over "
             "gene counts, then load each gene colored by its result — "
-            "up-regulated red, down-regulated blue. All computed in the "
-            "notebook (numpy only)."
+            "up-regulated red, down-regulated blue."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install("scipy statsmodels")),
         new_markdown_cell(
-            "## Counts → log2 fold-change and a t-test\n\n"
-            "Simulate control vs treatment counts for a panel of genes (a few "
-            "truly differential), then compute per-gene log2FC and a Welch "
-            "t-test — a normal approximation gives the p-value, no scipy needed. "
-            "Swap in your own DESeq2/edgeR table joined to gene coordinates."
+            "## Counts → log2 fold-change, Welch t-test, FDR\n\n"
+            "Simulated control vs treatment counts stand in for a counts matrix "
+            "(a few genes truly differential). The stats are the real tools — "
+            "`scipy.stats.ttest_ind` (Welch) and Benjamini-Hochberg FDR from "
+            "`statsmodels` — so swapping in your own counts, or a DESeq2/edgeR "
+            "results table joined to gene coordinates, changes nothing downstream."
         ),
         new_code_cell(
-            'import math\n'
             'import numpy as np\n'
-            'import pandas as pd\n\n'
+            'import pandas as pd\n'
+            'from scipy.stats import ttest_ind\n'
+            'from statsmodels.stats.multitest import multipletests\n\n'
             'rng = np.random.default_rng(7)\n'
             'n_genes, n_rep = 80, 4\n'
-            'chrom, gene_len, gap = "7", 6_000, 40_000\n'
-            'starts = 1_000_000 + np.arange(n_genes) * gap\n\n'
+            'starts = 1_000_000 + np.arange(n_genes) * 40_000\n\n'
             'base = rng.uniform(20, 400, n_genes)  # baseline expression per gene\n'
             'true_lfc = np.zeros(n_genes)\n'
             'up = rng.choice(n_genes, 6, replace=False)\n'
             'down = rng.choice(np.setdiff1d(np.arange(n_genes), up), 6, replace=False)\n'
-            'true_lfc[up] = rng.uniform(1.5, 3.0, up.size)\n'
-            'true_lfc[down] = -rng.uniform(1.5, 3.0, down.size)\n\n'
+            'true_lfc[up] = rng.uniform(1.5, 3.0, 6)\n'
+            'true_lfc[down] = -rng.uniform(1.5, 3.0, 6)\n'
             'ctrl = rng.poisson(base[:, None], size=(n_genes, n_rep))\n'
             'treat = rng.poisson((base * 2.0**true_lfc)[:, None], size=(n_genes, n_rep))\n\n'
             'lc, lt = np.log2(ctrl + 1), np.log2(treat + 1)\n'
             'lfc = lt.mean(1) - lc.mean(1)\n'
-            'se = np.sqrt(lc.var(1, ddof=1) / n_rep + lt.var(1, ddof=1) / n_rep)\n'
-            't = np.divide(lfc, se, out=np.zeros_like(lfc), where=se > 0)\n'
-            'pval = np.array([math.erfc(abs(v) / math.sqrt(2)) for v in t])\n\n'
+            'padj = multipletests(ttest_ind(lt, lc, axis=1, equal_var=False).pvalue,\n'
+            '                     method="fdr_bh")[1]\n\n'
             'de = pd.DataFrame(\n'
             '    {\n'
-            '        "chrom": chrom,\n'
+            '        "chrom": "7",\n'
             '        "start": starts,\n'
-            '        "end": starts + gene_len,\n'
+            '        "end": starts + 6_000,\n'
             '        "name": [f"GENE{i:04d}" for i in range(n_genes)],\n'
             '        "log2fc": lfc.round(2),\n'
-            '        "pvalue": pval,\n'
+            '        "padj": padj.round(4),\n'
             '    }\n'
             ')\n'
             'de["sig"] = np.where(\n'
-            '    (de.pvalue < 0.01) & (de.log2fc.abs() > 1),\n'
+            '    (de.padj < 0.05) & (de.log2fc.abs() > 1),\n'
             '    np.where(de.log2fc > 0, "up", "down"),\n'
             '    "ns",\n'
             ')\n'
-            'de.sort_values("pvalue").head()'
+            'de.sort_values("padj").head()'
         ),
         new_markdown_cell(
             "## Load the DE table onto the genome\n\n"
-            "Each gene is colored by call; `log2fc`/`pvalue` ride along and show "
+            "Each gene is colored by call; `log2fc`/`padj` ride along and show "
             "in the feature details."
         ),
         new_code_cell(
@@ -613,7 +560,7 @@ save(
             "UCSC name (`hg38`, `hg19`, `mm10`) or a GenArk accession "
             "(`GCA_...`). It returns plain JSON you hand to the view."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## Pull hg38 and open it at a gene\n\n"
             "The hub config carries a gene-name search index, so `location` "
@@ -679,7 +626,7 @@ save(
             "genome view and the control sit side by side, both driven from the "
             "same notebook state."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install("scipy")),
         new_markdown_cell(
             "## The analysis\n\n"
             "The same small DE table as the DE example — genes with a log2 "
@@ -689,7 +636,8 @@ save(
         ),
         new_code_cell(
             "import numpy as np\n"
-            "import pandas as pd\n\n"
+            "import pandas as pd\n"
+            "from scipy.stats import ttest_ind\n\n"
             "rng = np.random.default_rng(7)\n"
             "n_genes, n_rep = 80, 4\n"
             'chrom, gene_len, gap = "7", 6_000, 40_000\n'
@@ -704,9 +652,7 @@ save(
             "treat = rng.poisson((base * 2.0**true_lfc)[:, None], size=(n_genes, n_rep))\n"
             "lc, lt = np.log2(ctrl + 1), np.log2(treat + 1)\n"
             "lfc = lt.mean(1) - lc.mean(1)\n"
-            "se = np.sqrt(lc.var(1, ddof=1) / n_rep + lt.var(1, ddof=1) / n_rep)\n"
-            "t = np.divide(lfc, se, out=np.zeros_like(lfc), where=se > 0)\n"
-            "pval = np.exp(-0.717 * np.abs(t) - 0.416 * t**2)  # tail approx, no scipy\n\n"
+            "pval = ttest_ind(lt, lc, axis=1, equal_var=False).pvalue\n\n"
             "de = pd.DataFrame(\n"
             "    {\n"
             '        "chrom": chrom,\n'
@@ -776,98 +722,88 @@ save(
     "10_region_reactive.ipynb",
     [
         new_markdown_cell(
-            "# Region-reactive: compute only what's on screen\n\n"
+            "# Region-reactive: compute coverage only for what's on screen\n\n"
             + badge("10_region_reactive.ipynb")
             + "\n\nThe view syncs its visible region back to Python, so you can "
             "**observe `location` and recompute as the user pans** — the loop a "
-            "static browser can't close. Here a per-base score (stand-in for "
-            "coverage from a BAM, a motif scan, GC content, …) is computed only "
-            "over the window in view, at a bin size that adapts to the zoom "
-            "level. Nothing is precomputed genome-wide; the kernel answers for "
-            "exactly what's asked."
+            "static browser can't close. Here [pysam](https://pysam.readthedocs.io) "
+            "counts coverage from the real NA12878 exome BAM only over the window "
+            "in view, at a bin size that follows the zoom. Nothing is precomputed "
+            "genome-wide; the kernel answers for exactly what's asked, so zooming "
+            "in *raises* the resolution instead of cropping a fixed file."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install("pysam")),
         new_markdown_cell(
-            "## The (expensive) per-base score\n\n"
-            "`score` stands in for something you would not want to run across a "
-            "whole genome up front — read depth from a `pysam` pileup, a PWM "
-            "scan, GC content. `compute_windows` evaluates it only between "
-            "`start` and `end` and bins to ~200 points across the view, so "
-            "zooming in *raises* the resolution instead of just cropping a "
-            "fixed-resolution file."
+            "## Coverage for one window\n\n"
+            "Open the remote BAM once — only its index and the regions you query "
+            "are fetched. `coverage` counts per-base depth over `start..end` and "
+            "bins to ~400 points across the view. The BAM names the chromosome "
+            "`17`; the hg19 hub uses `chr17`, so we strip the prefix on the way in."
         ),
         new_code_cell(
             "import numpy as np\n"
-            "import pandas as pd\n\n"
-            "# two peaks in the score landscape, to have something to find\n"
-            "PEAKS = [(29_845_000, 2500, 1.0), (29_905_000, 6000, 0.7)]\n\n\n"
-            "def score(pos):\n"
-            "    pos = np.asarray(pos, dtype=float)\n"
-            "    y = 0.12 * np.sin(pos / 700.0)  # background\n"
-            "    for center, width, height in PEAKS:\n"
-            "        y = y + height * np.exp(-0.5 * ((pos - center) / width) ** 2)\n"
-            "    return y\n\n\n"
-            "def compute_windows(chrom, start, end):\n"
-            "    span = max(end - start, 1)\n"
-            "    binsize = max(50, span // 200)  # ~200 bins across the view\n"
-            "    edges = np.arange(start, end, binsize)\n"
-            "    rows = [\n"
-            "        {\n"
-            '            "chrom": chrom,\n'
-            '            "start": int(edge),\n'
-            '            "end": int(min(edge + binsize, end)),\n'
-            '            "score": round(float(score(np.arange(edge, min(edge + binsize, end))).mean()), 3),\n'
-            "        }\n"
-            "        for edge in edges\n"
-            "    ]\n"
-            "    return pd.DataFrame(rows)\n\n\n"
-            'compute_windows("10", 29_838_000, 29_858_000).head()'
+            "import pandas as pd\n"
+            "import pysam\n\n"
+            "BAM = (\n"
+            '    "https://s3.amazonaws.com/1000genomes/phase3/data/NA12878/"\n'
+            '    "exome_alignment/NA12878.mapped.ILLUMINA.bwa.CEU.exome.20121211.bam"\n'
+            ")\n"
+            "bam = pysam.AlignmentFile(BAM)\n\n\n"
+            "def coverage(chrom, start, end):\n"
+            '    depth = np.array(bam.count_coverage(chrom.removeprefix("chr"), start, end)).sum(0)\n'
+            "    binsize = max(20, (end - start) // 400)\n"
+            "    n = depth.size // binsize * binsize\n"
+            "    binned = depth[:n].reshape(-1, binsize).mean(1).round(1)\n"
+            "    starts = start + np.arange(binned.size) * binsize\n"
+            '    return pd.DataFrame(\n'
+            '        {"chrom": chrom, "start": starts, "end": starts + binsize, "depth": binned}\n'
+            "    )\n\n\n"
+            'coverage("chr17", 41_196_312, 41_277_500).head()  # BRCA1'
         ),
         new_markdown_cell(
             "## Recompute on every pan\n\n"
-            "`on_location` parses the view's current locstring and re-renders the "
-            "computed track for that window. `view.observe(..., \"location\")` "
-            "fires it whenever the region changes — dragging in the UI, or "
-            "setting `view.location` from code. `parse_loc` returns `None` for a "
-            "gene-name or empty location, so those are simply skipped."
+            "`on_location` parses the view's locstring and re-renders coverage for "
+            "that window. `view.observe(..., \"location\")` fires it whenever the "
+            "region changes — dragging in the UI or setting `view.location` from "
+            "code. A gene-name or whole-chromosome location doesn't parse, and a "
+            "window wider than 5 Mb is skipped to keep each per-pan query snappy."
         ),
         new_code_cell(
             "import re\n\n"
-            "from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n"
-            "grch38 = make_assembly(\n"
-            '    "GRCh38",\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
-            '    aliases=["hg38"],\n'
-            ")\n\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
+            "hg19 = fetch_hub(\"hg19\")\n"
+            "COLOR = \"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\"\n\n\n"
             "def parse_loc(loc):\n"
             '    m = re.match(r"^\\s*([^:\\s]+)\\s*:\\s*([\\d,]+)\\s*\\.\\.\\s*([\\d,]+)", loc or "")\n'
-            "    if not m:\n"
-            "        return None\n"
-            '    return m.group(1), int(m.group(2).replace(",", "")), int(m.group(3).replace(",", ""))\n\n\n'
+            '    return (m[1], int(m[2].replace(",", "")), int(m[3].replace(",", ""))) if m else None\n\n\n'
             "def render_region(chrom, start, end):\n"
-            "    view.tracks = []  # replace with the freshly computed window\n"
-            "    view.add_features(\n"
-            "        compute_windows(chrom, start, end),\n"
-            '        name="score (visible region)",\n'
-            '        track_id="signal",\n'
-            "        color=\"jexl:get(feature,'score') > 0.5 ? '#c62828' : get(feature,'score') > 0.25 ? '#f9a825' : '#90a4ae'\",\n"
-            "    )\n\n\n"
+            "    if end - start <= 5_000_000:\n"
+            "        view.tracks = []  # replace with the freshly computed window\n"
+            "        view.add_features(\n"
+            "            coverage(chrom, start, end),\n"
+            '            name="NA12878 exome depth (visible region)",\n'
+            '            track_id="depth",\n'
+            "            color=COLOR,\n"
+            "        )\n\n\n"
             "def on_location(change):\n"
             '    region = parse_loc(change["new"])\n'
             "    if region:\n"
             "        render_region(*region)\n\n\n"
-            'view = LinearGenomeView(assembly=grch38, location="10:29,838,000..29,858,000")\n'
+            "view = LinearGenomeView(\n"
+            '    assembly=hg19["assemblies"][0],\n'
+            '    aggregate_text_search_adapters=hg19["aggregateTextSearchAdapters"],\n'
+            '    location="BRCA1",\n'
+            ")\n"
             'view.observe(on_location, "location")\n'
-            "render_region(*parse_loc(view.location))  # initial fill\n"
-            "view"
+            "view  # pan or zoom — the depth track recomputes for the new window"
         ),
         new_markdown_cell(
-            "Driving `location` from code fires the observer, so the track "
+            "Driving `location` from code fires the same observer, so the track "
             "recomputes for the new window. Zooming out widens the bins; zooming "
             "in sharpens them — the resolution follows the view:"
         ),
         new_code_cell(
-            'view.location = "10:29,890,000..29,920,000"  # zoom to the second peak\n'
+            'view.location = "chr17:7,560,000..7,595,000"  # jump to TP53\n'
             "len(view.tracks[0][\"adapter\"][\"features\"]), \"bins computed for this window\""
         ),
     ],
@@ -888,7 +824,7 @@ save(
             "[all-vs-all synteny tutorial](https://jbrowse.org/jb2/docs/tutorials/allvsall_synteny/). "
             "Everything below is hosted, so this cell runs as-is."
         ),
-        new_code_cell(INSTALL),
+        new_code_cell(install()),
         new_markdown_cell(
             "## Stack the four strains, one all-vs-all track between them\n\n"
             "Each genome is a `make_assembly` from its hosted FASTA. The single "
