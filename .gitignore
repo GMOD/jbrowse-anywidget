@@ -8,3 +8,6 @@ __pycache__/
 *.venv/
 # The built bundle in jbrowse_anywidget/static/ IS committed so that
 # `pip install git+https://...` (and Colab) work without a JS toolchain.
+
+# generated screenshot intermediate (from gen_screenshot_specs.py)
+scripts/screenshot_specs.json

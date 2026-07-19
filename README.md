@@ -9,6 +9,19 @@ This is the modern replacement for the Dash-based `jbrowse-jupyter` +
 `dash_jbrowse` stack: no Dash server, no `dash-generate-components`, no webpack —
 just a Vite-bundled ESM file loaded by anywidget.
 
+## What it looks like
+
+A linear view with a conservation bigWig (quickstart), a bioframe interval
+result dropped onto the genome (CpG islands + shores), and a four-genome synteny
+view from `JBrowseApp` — all rendered headless from the built bundle by
+`scripts/screenshot_examples.mjs`:
+
+![quickstart: assembly + phyloP bigWig](images/01_quickstart.png)
+
+![bioframe result: CpG islands colored by GC%, with their shores](images/02_bioframe.png)
+
+![synteny: four E. coli strains compared with an all-vs-all PAF](images/11_synteny.png)
+
 ## Try it in Colab
 
 - Quickstart — [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)

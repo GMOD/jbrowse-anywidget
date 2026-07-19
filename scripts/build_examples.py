@@ -75,7 +75,10 @@ save(
         new_markdown_cell(
             "## An assembly and a view\n\n"
             "`make_assembly` builds the reference-sequence config for an "
-            "indexed (here bgzipped) FASTA. `location` sets the opening region."
+            "indexed (here bgzipped) FASTA. This reference names chromosomes `1`, "
+            "`2`, … but the UCSC bigWig below uses `chr1`, `chr2`, …; "
+            "`refname_aliases_uri` points at UCSC's alias table so the two line "
+            "up. `location` sets the opening region."
         ),
         new_code_cell(
             'from jbrowse_anywidget import LinearGenomeView, make_assembly, track\n\n'
@@ -83,6 +86,7 @@ save(
             '    "hg38",\n'
             '    "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
             '    aliases=["GRCh38"],\n'
+            '    refname_aliases_uri="https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt",\n'
             ')\n\n'
             'view = LinearGenomeView(assembly=hg38, location="10:29,838,565..29,838,850")\n'
             'view'
@@ -100,7 +104,7 @@ save(
         new_code_cell(
             'view.add_track(\n'
             '    track(\n'
-            '        "https://hgdownload.cse.ucsc.edu/goldenpath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            '        "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
             '        name="phyloP100way",\n'
             '    )\n'
             ')'
@@ -603,7 +607,7 @@ save(
             '        "assemblyNames": ["hg38"],\n'
             '        "adapter": {\n'
             '            "type": "BigWigAdapter",\n'
-            '            "uri": "https://hgdownload.cse.ucsc.edu/goldenpath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            '            "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
             '        },\n'
             '    }\n'
             ')'

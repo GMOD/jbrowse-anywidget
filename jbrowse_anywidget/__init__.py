@@ -239,6 +239,19 @@ class JBrowseApp(anywidget.AnyWidget):
     tracks = traitlets.List().tag(sync=True)
     views = traitlets.List().tag(sync=True)
 
+    # Read-back only (JS -> Python), one entry per view in `views`, updated as
+    # the user pans/zooms — the same live sync the single-view LinearGenomeView
+    # has, extended to every view. A linear view reports its visible region as a
+    # locstring ("ctgA:1..5,000"); a synteny/dotplot view reports the list of its
+    # two panels' locstrings. Observe it with `app.observe(handler, "view_locations")`.
+    view_locations = traitlets.List().tag(sync=True)
+
+    # Read-back only (JS -> Python): the most recently clicked feature, in any
+    # view, as a plain dict. `None` until one is selected.
+    selected_feature = traitlets.Dict(default_value=None, allow_none=True).tag(
+        sync=True
+    )
+
     def __init__(
         self,
         assemblies: list[JsonDict] | None = None,
