@@ -9,6 +9,25 @@ This is the modern replacement for the Dash-based `jbrowse-jupyter` +
 `dash_jbrowse` stack: no Dash server, no `dash-generate-components`, no webpack —
 just a Vite-bundled ESM file loaded by anywidget.
 
+## Install
+
+```bash
+pip install jbrowse-anywidget
+```
+
+The JS bundle ships prebuilt inside the wheel, so there is no Node toolchain to
+set up. Until the first PyPI release, install from git:
+
+```bash
+pip install "jbrowse-anywidget @ git+https://github.com/GMOD/jbrowse-anywidget"
+```
+
+```python
+from jbrowse_anywidget import LinearGenomeView
+
+LinearGenomeView(assembly="hg38", location="chr1:1,000,000..1,100,000")
+```
+
 ## What it looks like
 
 Every figure below is rendered headless from the built bundle by
@@ -72,12 +91,23 @@ one:
 ```bash
 git clone https://github.com/GMOD/jbrowse-components ../jbrowse-components
 pnpm install        # resolves the link: dependency to ../jbrowse-components
-pnpm build          # writes jbrowse_anywidget/static/index.js
+pnpm build          # writes static/index.js (lgv) and static/app.js (full app)
 pip install -e ".[dev]"
 ```
 
-`pnpm dev` rebuilds the bundle on change. Then open a notebook from `examples/`.
-Regenerate the notebooks with `python scripts/build_examples.py`.
+`pnpm dev` rebuilds the bundle on change, and `pnpm typecheck` runs tsc. Then
+open a notebook from `examples/`. `pytest` covers the Python config builders and
+the Python <-> JS trait contract; neither it nor the bundle build needs network.
+
+Regenerating the notebooks and figures needs the extra script dependencies
+(`pip install -e ".[dev,scripts]"`):
+
+```bash
+python scripts/build_examples.py       # rewrite examples/*.ipynb
+python scripts/gen_screenshot_specs.py # -> scripts/screenshot_specs.json
+node scripts/screenshot_examples.mjs   # -> images/*.png (puppeteer, resolved
+                                       #    from the sibling checkout)
+```
 
 ## API sketch
 
@@ -262,10 +292,8 @@ manager (`output.enable_custom_widget_manager()`).
 
 ## Status
 
-Prototype consolidating two earlier experiments
-(`experiments/jbrowse_lgv_widget`, `dont_care/jb2anywidget`), now bundling the
-GPU-rendered v4 view. The eleven notebooks in `examples/` run top-to-bottom in
-Colab; their analyses use the tools scientists already work in (bioframe
+Prototype, bundling the GPU-rendered v4 view. The eleven notebooks in
+`examples/` run top-to-bottom in Colab; their analyses use the tools scientists already work in (bioframe
 intervals, pysam coverage, scipy/statsmodels DE, DEST Fst windows) on real data,
 and their track configs render in a headless browser. Two of them close the loop
 the other way — a slider and a pan in the view drive Python to recompute and
