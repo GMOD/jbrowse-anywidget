@@ -9,10 +9,26 @@ description = "JBrowse 2 linear genome view as an anywidget for notebooks"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["jbrowse", "genomics", "genome-browser", "jupyter", "anywidget"]
+classifiers = [
+  "Framework :: Jupyter",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = ["anywidget>=0.9"]
+
+[project.urls]
+Homepage = "https://github.com/GMOD/jbrowse-anywidget"
+Repository = "https://github.com/GMOD/jbrowse-anywidget"
+Issues = "https://github.com/GMOD/jbrowse-anywidget/issues"
 
 [project.optional-dependencies]
 dev = ["pandas", "watchfiles", "pytest"]
+# what scripts/ needs on top of dev: nbformat builds examples/, bioframe
+# generates the screenshot specs. Kept out of dev so CI installs neither.
+scripts = ["nbformat", "bioframe"]
 
 [tool.hatch.build]
 # Ship the prebuilt JS bundle; never the JS toolchain.
