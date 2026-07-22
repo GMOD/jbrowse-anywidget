@@ -7,10 +7,11 @@ The interface is JBrowse's own config: assemblies, tracks, and sessions are the
 same JSON-like dicts documented at https://jbrowse.org/jb2/docs/config_guide/,
 handed straight to the view. `assembly=` also accepts a hub name (``"hg38"``,
 ``"GCF_..."``) the view fetches and resolves, or a bare sequence-file URL
-(``".../hg38.fa.gz"``, ``.2bit``) it builds an assembly from — so `make_assembly`
-is only needed for aliases or a non-sibling index. Python adds only what JSON
-can't express itself — turning an in-memory DataFrame into a track
-(`add_features`) and a little assembly boilerplate (`make_assembly`).
+(``".../hg38.fa.gz"``, ``.2bit``) it builds an assembly from. A custom genome
+needing aliases is the flat shorthand dict — ``{"name": ..., "uri": ...,
+"refNameAliases": {"uri": ...}}`` — which core expands itself. Python adds only
+what JSON can't express: turning an in-memory DataFrame into a track
+(`add_features`).
 
 For the common case a bare data-file URI in `tracks=[...]` is enough — its
 track type and adapter are inferred from the extension (the declarative
@@ -60,7 +61,6 @@ __all__ = [
     "synteny_view",
     "dotplot_view",
     "synteny_track",
-    "make_assembly",
     "fetch_hub",
     "plugin",
     "PLUGIN_STORE",
@@ -222,7 +222,7 @@ class JBrowseApp(anywidget.AnyWidget):
     `synteny_view`, and `dotplot_view` helpers::
 
         view = JBrowseApp(
-            assemblies=[make_assembly("hg38", ...), make_assembly("mm39", ...)],
+            assemblies=[{"name": "hg38", "uri": ...}, {"name": "mm39", "uri": ...}],
             tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
             views=[synteny_view(["hg38", "mm39"], tracks=["hg38_mm39.paf"])],
         )
@@ -419,60 +419,6 @@ def synteny_track(
         **extra,
     }
     return conf
-
-
-def make_assembly(
-    name: str,
-    fasta_uri: str,
-    fai_uri: str | None = None,
-    gzi_uri: str | None = None,
-    aliases: list[str] | None = None,
-    refname_aliases_uri: str | None = None,
-) -> JsonDict:
-    """Build an assembly config dict for an indexed FASTA, bgzipped FASTA, or `.2bit`.
-
-    A convenience over writing the assembly JSON by hand; the return value is a
-    plain dict you can edit or pass as `assembly=`. In the common case it is the
-    flat shorthand `{"name": ..., "uri": ...}`: JBrowse itself picks the concrete
-    adapter type (`IndexedFastaAdapter`/`BgzipFastaAdapter`/`TwoBitAdapter`) from
-    the extension, derives the `.fai`/`.gzi` siblings, and fills in the
-    `ReferenceSequenceTrack`, so no adapter-type table lives here. Pass
-    `fai_uri`/`gzi_uri` to override a non-sibling index — that widens `sequence`
-    to its adapter form, the only shape with a slot for the override.
-    `refname_aliases_uri` points at a tab-separated aliases file (as UCSC
-    publishes) so a track whose reference names differ from the sequence — e.g. a
-    BAM using `chr1` against a `1`-named reference — still lines up.
-    """
-    # a non-sibling index has no home in the flat shorthand, so it falls back to
-    # the sequence.adapter form; the bare `uri` there still infers the type
-    sequence = (
-        {
-            "type": "ReferenceSequenceTrack",
-            "trackId": f"{name}-ReferenceSequenceTrack",
-            "adapter": _drop_none(
-                {
-                    "uri": fasta_uri,
-                    "faiLocation": {"uri": fai_uri} if fai_uri else None,
-                    "gziLocation": {"uri": gzi_uri} if gzi_uri else None,
-                }
-            ),
-        }
-        if fai_uri or gzi_uri
-        else None
-    )
-    return _drop_none(
-        {
-            "name": name,
-            "aliases": aliases if aliases else [],
-            # flat shorthand: core expands { name, uri } into the sequence track,
-            # and the same bare { uri } into a RefNameAliasAdapter
-            "uri": None if sequence else fasta_uri,
-            "sequence": sequence,
-            "refNameAliases": (
-                {"uri": refname_aliases_uri} if refname_aliases_uri else None
-            ),
-        }
-    )
 
 
 def _normalize_track(item: TrackEntry) -> JsonDict:

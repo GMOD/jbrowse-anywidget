@@ -141,16 +141,25 @@ view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':
 ```
 
 Python adds only what config JSON can't express itself: `track` (URI → loose
-spec the view expands), `add_features` (DataFrame/list of dicts → track) and
-`make_assembly` (a little assembly boilerplate). Everything else is `add_track(<config dict>)` — or
+spec the view expands) and `add_features` (DataFrame/list of dicts → track).
+Everything else is `add_track(<config dict>)` — or
 pass whole `tracks=[...]` / `default_session={...}` configs to the constructor.
 Tracks are opened in the view automatically; removing one from `view.tracks`
 closes it.
 
 For a custom genome, `assembly=` also accepts a bare sequence-file URL
 (`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly from
-it, deriving the name from the file — so `make_assembly` is only needed to add
-reference-name aliases or a non-sibling index.
+it, deriving the name from the file. To name it yourself, or to add
+reference-name aliases, write the flat shorthand dict; there is no Python
+builder because core expands this itself:
+
+```python
+LinearGenomeView(assembly={
+    "name": "hg19",
+    "uri": "https://.../hg19.fa.gz",
+    "refNameAliases": {"uri": "https://.../hg19_aliases.txt"},
+})
+```
 
 For human/model-organism data, `fetch_hub("hg38")` (also `hg19`, `mm10`, a
 GenArk `GCA_...`) returns a ready, CORS-enabled assembly config from
@@ -211,10 +220,13 @@ fields come from the view's
 built with `linear_view`, `synteny_view`, and `dotplot_view`:
 
 ```python
-from jbrowse_anywidget import JBrowseApp, synteny_view, synteny_track, make_assembly
+from jbrowse_anywidget import JBrowseApp, synteny_view, synteny_track
 
 JBrowseApp(
-    assemblies=[make_assembly("hg38", hg38_fa), make_assembly("mm39", mm39_fa)],
+    assemblies=[
+        {"name": "hg38", "uri": hg38_fa},
+        {"name": "mm39", "uri": mm39_fa},
+    ],
     tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
     views=[synteny_view(["hg38", "mm39"], tracks=["hg38-mm39-paf"])],
 )

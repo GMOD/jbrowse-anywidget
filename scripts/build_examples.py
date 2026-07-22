@@ -74,20 +74,22 @@ save(
         new_code_cell(install()),
         new_markdown_cell(
             "## An assembly and a view\n\n"
-            "`make_assembly` builds the reference-sequence config for an "
-            "indexed (here bgzipped) FASTA. This reference names chromosomes `1`, "
+            "An assembly is the flat `{name, uri}` shorthand — core picks the adapter "
+            "from the extension and derives the index files. This reference names chromosomes `1`, "
             "`2`, … but the UCSC bigWig below uses `chr1`, `chr2`, …; "
             "`refname_aliases_uri` points at UCSC's alias table so the two line "
             "up. `location` sets the opening region."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly, track\n\n'
-            'hg38 = make_assembly(\n'
-            '    "hg38",\n'
-            '    "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
-            '    aliases=["GRCh38"],\n'
-            '    refname_aliases_uri="https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt",\n'
-            ')\n\n'
+            'from jbrowse_anywidget import LinearGenomeView, track\n\n'
+            'hg38 = {\n'
+            '    "name": "hg38",\n'
+            '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
+            '    "aliases": ["GRCh38"],\n'
+            '    "refNameAliases": {\n'
+            '        "uri": "https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt"\n'
+            '    },\n'
+            '}\n\n'
             'view = LinearGenomeView(assembly=hg38, location="10:29,838,565..29,838,850")\n'
             'view'
         ),
@@ -160,12 +162,12 @@ save(
             "does. This lands on *TP53*."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
-            'hg38 = make_assembly(\n'
-            '    "hg38",\n'
-            '    "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
-            '    aliases=["GRCh38"],\n'
-            ')\n'
+            'from jbrowse_anywidget import LinearGenomeView\n\n'
+            'hg38 = {\n'
+            '    "name": "hg38",\n'
+            '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
+            '    "aliases": ["GRCh38"],\n'
+            '}\n'
             'view = LinearGenomeView(assembly=hg38, location="17:7,660,000..7,700,000")\n'
             'view.add_features(\n'
             '    islands, name="CpG islands (by GC%)",\n'
@@ -195,12 +197,12 @@ save(
             "automatically from the `uri`, so the adapter is just the URL."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
-            'grch38 = make_assembly(\n'
-            '    "GRCh38",\n'
-            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
-            '    aliases=["hg38"],\n'
-            ')\n\n'
+            'from jbrowse_anywidget import LinearGenomeView\n\n'
+            'grch38 = {\n'
+            '    "name": "GRCh38",\n'
+            '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "aliases": ["hg38"],\n'
+            '}\n\n'
             'cram = (\n'
             '    "https://jbrowse.org/genomes/GRCh38/alignments/NA12878/"\n'
             '    "NA12878.alt_bwamem_GRCh38DH.20150826.CEU.exome.cram"\n'
@@ -267,11 +269,11 @@ save(
             "the rows. The VCF's `.tbi` index is resolved from the `uri`."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
-            'volvox = make_assembly(\n'
-            '    "volvox",\n'
-            '    "https://jbrowse.org/genomes/volvox/volvox.fa.gz",\n'
-            ')\n\n'
+            'from jbrowse_anywidget import LinearGenomeView\n\n'
+            'volvox = {\n'
+            '    "name": "volvox",\n'
+            '    "uri": "https://jbrowse.org/genomes/volvox/volvox.fa.gz",\n'
+            '}\n\n'
             'base = (\n'
             '    "https://raw.githubusercontent.com/GMOD/jbrowse-components/main/"\n'
             '    "test_data/volvox/"\n'
@@ -533,12 +535,12 @@ save(
             "in the feature details."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
-            'grch38 = make_assembly(\n'
-            '    "GRCh38",\n'
-            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
-            '    aliases=["hg38"],\n'
-            ')\n'
+            'from jbrowse_anywidget import LinearGenomeView\n\n'
+            'grch38 = {\n'
+            '    "name": "GRCh38",\n'
+            '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "aliases": ["hg38"],\n'
+            '}\n'
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n'
             'view.add_features(\n'
             '    de,\n'
@@ -686,12 +688,12 @@ save(
         ),
         new_code_cell(
             "import ipywidgets as widgets\n\n"
-            "from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n"
-            "grch38 = make_assembly(\n"
-            '    "GRCh38",\n'
-            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
-            '    aliases=["hg38"],\n'
-            ")\n"
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "grch38 = {\n"
+            '    "name": "GRCh38",\n'
+            '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "aliases": ["hg38"],\n'
+            "}\n"
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
             'COLOR = "jexl:get(feature,\'sig\') == \'up\' ? \'#c62828\' : get(feature,\'sig\') == \'down\' ? \'#1565c0\' : \'#cfcfcf\'"\n\n\n'
             "def render(pvalue_cutoff):\n"
@@ -831,7 +833,8 @@ save(
         new_code_cell(install()),
         new_markdown_cell(
             "## Stack the four strains, one all-vs-all track between them\n\n"
-            "Each genome is a `make_assembly` from its hosted FASTA. The single "
+            "Each genome is the flat `{name, uri}` shorthand — JBrowse derives the "
+            "`.fai`/`.gzi` from the URL. The single "
             "`AllVsAllPAFAdapter` track serves every pair from one PAF, so the "
             "three bands between the four rows are all the same trackId "
             "(`tracks=[[\"ecoli_ava\"]] * 3`, one entry per adjacent pair). "
@@ -839,10 +842,10 @@ save(
             "hides short noisy blocks."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import JBrowseApp, make_assembly, synteny_view\n\n"
+            "from jbrowse_anywidget import JBrowseApp, synteny_view\n\n"
             'BASE = "https://jbrowse.org/demos/ecoli_pangenome"\n'
             'STRAINS = ["K12", "Sakai", "CFT073", "NCTC86"]\n\n'
-            "assemblies = [make_assembly(s, f\"{BASE}/{s}.fa.gz\") for s in STRAINS]\n\n"
+            "assemblies = [{\"name\": s, \"uri\": f\"{BASE}/{s}.fa.gz\"} for s in STRAINS]\n\n"
             "ecoli_ava = {\n"
             '    "type": "SyntenyTrack",\n'
             '    "trackId": "ecoli_ava",\n'
