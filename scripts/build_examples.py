@@ -6,8 +6,13 @@ so it runs unchanged in Colab and executes headless against a local editable
 install for verification.
 """
 
+from pathlib import Path
+
 import nbformat as nbf
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
+
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+
 
 def install(extra=""):
     """The first cell of every notebook: install in Colab, no-op locally.
@@ -35,6 +40,7 @@ try:
 except ImportError:
     pass"""
 
+
 COLAB = "https://colab.research.google.com/assets/colab-badge.svg"
 
 
@@ -55,7 +61,7 @@ def save(name, cells):
     stem = name.removesuffix(".ipynb")
     for i, cell in enumerate(nb.cells):
         cell["id"] = f"{stem}-{i}"
-    with open(f"examples/{name}", "w") as f:
+    with (EXAMPLES / name).open("w") as f:
         nbf.write(nb, f)
     print("wrote examples/" + name)
 
@@ -81,17 +87,17 @@ save(
             "up. `location` sets the opening region."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, track\n\n'
-            'hg38 = {\n'
+            "from jbrowse_anywidget import LinearGenomeView, track\n\n"
+            "hg38 = {\n"
             '    "name": "hg38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
             '    "aliases": ["GRCh38"],\n'
             '    "refNameAliases": {\n'
             '        "uri": "https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt"\n'
-            '    },\n'
-            '}\n\n'
+            "    },\n"
+            "}\n\n"
             'view = LinearGenomeView(assembly=hg38, location="10:29,838,565..29,838,850")\n'
-            'view'
+            "view"
         ),
         new_markdown_cell(
             "## Add a track\n\n"
@@ -104,12 +110,12 @@ save(
             "a key you add to the returned config dict."
         ),
         new_code_cell(
-            'view.add_track(\n'
-            '    track(\n'
+            "view.add_track(\n"
+            "    track(\n"
             '        "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
             '        name="phyloP100way",\n'
-            '    )\n'
-            ')'
+            "    )\n"
+            ")"
         ),
         new_markdown_cell(
             "## Drive the view from Python, read it back\n\n"
@@ -143,17 +149,17 @@ save(
             "line. This assembly names chromosomes `17` (no `chr`), so match it."
         ),
         new_code_cell(
-            'import bioframe as bf\n'
-            'import pandas as pd\n\n'
+            "import bioframe as bf\n"
+            "import pandas as pd\n\n"
             'cols = "bin chrom start end name length cpgNum gcNum perCpg perGc obsExp".split()\n'
-            'islands = pd.read_csv(\n'
+            "islands = pd.read_csv(\n"
             '    "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cpgIslandExt.txt.gz",\n'
             '    sep="\\t", names=cols,\n'
-            ')\n'
+            ")\n"
             'islands = islands[islands.chrom == "chr17"].assign(chrom="17")\n'
-            'shores = bf.merge(bf.subtract(bf.expand(islands, pad=2000), islands))\n'
+            "shores = bf.merge(bf.subtract(bf.expand(islands, pad=2000), islands))\n"
             'print(len(islands), "islands ->", len(shores), "shores")\n'
-            'shores.head()'
+            "shores.head()"
         ),
         new_markdown_cell(
             "## Both on the genome\n\n"
@@ -162,19 +168,19 @@ save(
             "does. This lands on *TP53*."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView\n\n'
-            'hg38 = {\n'
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "hg38 = {\n"
             '    "name": "hg38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
             '    "aliases": ["GRCh38"],\n'
-            '}\n'
+            "}\n"
             'view = LinearGenomeView(assembly=hg38, location="17:7,660,000..7,700,000")\n'
-            'view.add_features(\n'
+            "view.add_features(\n"
             '    islands, name="CpG islands (by GC%)",\n'
-            '    color="jexl:get(feature,\'perGc\') > 65 ? \'#00695c\' : \'#4db6ac\'",\n'
-            ')\n'
+            "    color=\"jexl:get(feature,'perGc') > 65 ? '#00695c' : '#4db6ac'\",\n"
+            ")\n"
             'view.add_features(shores, name="CpG shores", color="#f9a825")\n'
-            'view'
+            "view"
         ),
     ],
 )
@@ -197,29 +203,29 @@ save(
             "automatically from the `uri`, so the adapter is just the URL."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView\n\n'
-            'grch38 = {\n'
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "grch38 = {\n"
             '    "name": "GRCh38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    "aliases": ["hg38"],\n'
-            '}\n\n'
-            'cram = (\n'
+            "}\n\n"
+            "cram = (\n"
             '    "https://jbrowse.org/genomes/GRCh38/alignments/NA12878/"\n'
             '    "NA12878.alt_bwamem_GRCh38DH.20150826.CEU.exome.cram"\n'
-            ')\n\n'
-            'view = LinearGenomeView(\n'
+            ")\n\n"
+            "view = LinearGenomeView(\n"
             '    assembly=grch38, location="1:100,987,200..100,987,450"\n'
-            ')\n'
-            'view.add_track(\n'
-            '    {\n'
+            ")\n"
+            "view.add_track(\n"
+            "    {\n"
             '        "type": "AlignmentsTrack",\n'
             '        "trackId": "na12878-exome",\n'
             '        "name": "NA12878 exome",\n'
             '        "assemblyNames": ["GRCh38"],\n'
             '        "adapter": {"type": "CramAdapter", "uri": cram},\n'
-            '    }\n'
-            ')\n'
-            'view'
+            "    }\n"
+            ")\n"
+            "view"
         ),
         new_markdown_cell(
             "## Color reads, show soft-clips\n\n"
@@ -228,23 +234,23 @@ save(
             "signal, and reveal soft-clipped bases."
         ),
         new_code_cell(
-            'view.add_track(\n'
-            '    {\n'
+            "view.add_track(\n"
+            "    {\n"
             '        "type": "AlignmentsTrack",\n'
             '        "trackId": "na12878-colored",\n'
             '        "name": "NA12878 (pair orientation)",\n'
             '        "assemblyNames": ["GRCh38"],\n'
             '        "adapter": {"type": "CramAdapter", "uri": cram},\n'
             '        "displays": [\n'
-            '            {\n'
+            "            {\n"
             '                "type": "LinearAlignmentsDisplay",\n'
             '                "displayId": "na12878-colored-display",\n'
             '                "colorBy": {"type": "pairOrientation"},\n'
             '                "showSoftClipping": True,\n'
-            '            }\n'
-            '        ],\n'
-            '    }\n'
-            ')'
+            "            }\n"
+            "        ],\n"
+            "    }\n"
+            ")"
         ),
     ],
 )
@@ -269,17 +275,17 @@ save(
             "the rows. The VCF's `.tbi` index is resolved from the `uri`."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView\n\n'
-            'volvox = {\n'
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "volvox = {\n"
             '    "name": "volvox",\n'
             '    "uri": "https://jbrowse.org/genomes/volvox/volvox.fa.gz",\n'
-            '}\n\n'
-            'base = (\n'
+            "}\n\n"
+            "base = (\n"
             '    "https://raw.githubusercontent.com/GMOD/jbrowse-components/main/"\n'
             '    "test_data/volvox/"\n'
-            ')\n\n'
-            'def sv_track(track_id, name, display_type):\n'
-            '    return {\n'
+            ")\n\n"
+            "def sv_track(track_id, name, display_type):\n"
+            "    return {\n"
             '        "type": "VariantTrack",\n'
             '        "trackId": track_id,\n'
             '        "name": name,\n'
@@ -288,36 +294,36 @@ save(
             '            "type": "VcfTabixAdapter",\n'
             '            "uri": base + "volvox.sv.vcf.gz",\n'
             '            "samplesTsvLocation": {"uri": base + "volvox.sv.samples.tsv"},\n'
-            '        },\n'
+            "        },\n"
             '        "displays": [\n'
-            '            {\n'
+            "            {\n"
             '                "type": display_type,\n'
             '                "displayId": track_id + "-display",\n'
             '                "colorBy": "population",\n'
-            '            }\n'
-            '        ],\n'
-            '    }\n\n'
+            "            }\n"
+            "        ],\n"
+            "    }\n\n"
             'view = LinearGenomeView(assembly=volvox, location="ctgA:1..50,000")\n'
-            'view.add_track(\n'
+            "view.add_track(\n"
             '    sv_track("sv-band", "multi-sample SV", "LinearMultiSampleVariantDisplay")\n'
-            ')\n'
-            'view'
+            ")\n"
+            "view"
         ),
         new_markdown_cell(
             "## The same VCF as a genotype matrix\n\n"
-            'Swap the display `type` to `LinearMultiSampleVariantMatrixDisplay` '
+            "Swap the display `type` to `LinearMultiSampleVariantMatrixDisplay` "
             "for a compact grid — one column per variant, one row per sample — "
             "that scales to hundreds of samples."
         ),
         new_code_cell(
             'matrix = LinearGenomeView(assembly=volvox, location="ctgA:1..50,000")\n'
-            'matrix.add_track(\n'
-            '    sv_track(\n'
+            "matrix.add_track(\n"
+            "    sv_track(\n"
             '        "sv-matrix", "genotype matrix",\n'
             '        "LinearMultiSampleVariantMatrixDisplay",\n'
-            '    )\n'
-            ')\n'
-            'matrix'
+            "    )\n"
+            ")\n"
+            "matrix"
         ),
     ],
 )
@@ -344,44 +350,44 @@ save(
             "`chr17` to match the hg19 hub below."
         ),
         new_code_cell(
-            'import numpy as np\n'
-            'import pandas as pd\n'
-            'import pysam\n\n'
-            'BAM = (\n'
+            "import numpy as np\n"
+            "import pandas as pd\n"
+            "import pysam\n\n"
+            "BAM = (\n"
             '    "https://s3.amazonaws.com/1000genomes/phase3/data/NA12878/"\n'
             '    "exome_alignment/NA12878.mapped.ILLUMINA.bwa.CEU.exome.20121211.bam"\n'
-            ')\n'
+            ")\n"
             'CHROM, START, END = "17", 41_196_312, 41_277_500  # BRCA1, GRCh37\n\n'
-            'bam = pysam.AlignmentFile(BAM)\n'
-            'depth = np.array(bam.count_coverage(CHROM, START, END)).sum(0)\n\n'
-            'binsize = 100\n'
-            'n = depth.size // binsize * binsize\n'
-            'binned = depth[:n].reshape(-1, binsize).mean(1).round(1)\n'
-            'starts = START + np.arange(binned.size) * binsize\n'
-            'coverage = pd.DataFrame(\n'
+            "bam = pysam.AlignmentFile(BAM)\n"
+            "depth = np.array(bam.count_coverage(CHROM, START, END)).sum(0)\n\n"
+            "binsize = 100\n"
+            "n = depth.size // binsize * binsize\n"
+            "binned = depth[:n].reshape(-1, binsize).mean(1).round(1)\n"
+            "starts = START + np.arange(binned.size) * binsize\n"
+            "coverage = pd.DataFrame(\n"
             '    {"chrom": "chr17", "start": starts, "end": starts + binsize, "depth": binned}\n'
-            ')\n'
-            'coverage.head()'
+            ")\n"
+            "coverage.head()"
         ),
         new_markdown_cell(
             "## See it on hg19, opened at the gene by name\n\n"
-            "`fetch_hub(\"hg19\")` brings the genome and a gene-name search index, "
-            "so `location=\"BRCA1\"` just works. Exome capture concentrates reads "
+            '`fetch_hub("hg19")` brings the genome and a gene-name search index, '
+            'so `location="BRCA1"` just works. Exome capture concentrates reads '
             "on the exons — the depth track peaks there and drops between."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n'
+            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
             'hg19 = fetch_hub("hg19")\n'
-            'view = LinearGenomeView(\n'
+            "view = LinearGenomeView(\n"
             '    assembly=hg19["assemblies"][0],\n'
             '    aggregate_text_search_adapters=hg19["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
-            ')\n'
-            'view.add_features(\n'
+            ")\n"
+            "view.add_features(\n"
             '    coverage, name="NA12878 exome depth",\n'
-            '    color="jexl:get(feature,\'depth\') > 40 ? \'#c62828\' : get(feature,\'depth\') > 10 ? \'#f9a825\' : \'#cfcfcf\'",\n'
-            ')\n'
-            'view'
+            "    color=\"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\",\n"
+            ")\n"
+            "view"
         ),
     ],
 )
@@ -413,61 +419,61 @@ save(
             "denominators). Swap the CSV for your own two frequency columns."
         ),
         new_code_cell(
-            'import pandas as pd\n\n'
+            "import pandas as pd\n\n"
             'freqs = pd.read_csv("https://jbrowse.org/demos/popgen/dest_cyp6g1_freqs.csv")\n'
-            'p1, p2 = freqs.afr_freq, freqs.cosmo_freq\n'
+            "p1, p2 = freqs.afr_freq, freqs.cosmo_freq\n"
             'freqs["num"] = (p1 - p2) ** 2                 # Hudson Fst numerator\n'
             'freqs["den"] = p1 * (1 - p2) + p2 * (1 - p1)  # ... denominator\n'
             'freqs["w"] = freqs.pos // 10_000 * 10_000\n\n'
             'g = freqs.groupby("w")\n'
-            'windows = pd.DataFrame({\n'
+            "windows = pd.DataFrame({\n"
             '    "chrom": "chr2R",\n'
             '    "start": g.size().index.astype(int),\n'
             '    "end": g.size().index.astype(int) + 10_000,\n'
             '    "fst": (g.num.sum() / g.den.sum()).clip(lower=0).round(3).values,\n'
             '    "n_snps": g.size().values,\n'
-            '})\n'
-            'windows = windows[windows.n_snps >= 20]\n'
+            "})\n"
+            "windows = windows[windows.n_snps >= 20]\n"
             'windows.sort_values("fst", ascending=False).head()'
         ),
         new_markdown_cell(
             "## View the sweep on dm6\n\n"
-            "`fetch_hub(\"dm6\")` pulls the fly genome, refName aliases, and a "
+            '`fetch_hub("dm6")` pulls the fly genome, refName aliases, and a '
             "gene-name search index from the hosted hub. The computed Fst windows "
             "redden at the peak; the per-population diversity loads as a two-line "
             "wiggle — cosmopolitan collapses at the sweep while African holds."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n'
+            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
             'BW = "https://jbrowse.org/demos/popgen/dest_cyp6g1_div_%s.bw"\n'
-            'div = lambda label, color, pop: {\n'
+            "div = lambda label, color, pop: {\n"
             '    "type": "BigWigAdapter", "source": label, "color": color,\n'
             '    "bigWigLocation": {"uri": BW % pop},\n'
-            '}\n\n'
+            "}\n\n"
             'dm6 = fetch_hub("dm6")\n'
-            'view = LinearGenomeView(\n'
+            "view = LinearGenomeView(\n"
             '    assembly=dm6["assemblies"][0],\n'
             '    aggregate_text_search_adapters=dm6["aggregateTextSearchAdapters"],\n'
             '    location="chr2R:11,900,000..12,450,000",  # or a gene name: "Cyp6g1"\n'
-            ')\n'
-            'view.add_features(\n'
-            '    windows,\n'
+            ")\n"
+            "view.add_features(\n"
+            "    windows,\n"
             '    name="Fst (African vs cosmopolitan)",\n'
-            '    color="jexl:get(feature,\'fst\') > 0.25 ? \'#d84315\' : get(feature,\'fst\') > 0.12 ? \'#f9a825\' : \'#90a4ae\'",\n'
-            ')\n'
-            'view.add_track({\n'
+            "    color=\"jexl:get(feature,'fst') > 0.25 ? '#d84315' : get(feature,'fst') > 0.12 ? '#f9a825' : '#90a4ae'\",\n"
+            ")\n"
+            "view.add_track({\n"
             '    "type": "MultiQuantitativeTrack",\n'
             '    "trackId": "diversity",\n'
             '    "name": "Nucleotide diversity (African vs cosmopolitan)",\n'
             '    "adapter": {"type": "MultiWiggleAdapter", "subadapters": [\n'
             '        div("African (ancestral)", "#377eb8", "african"),\n'
             '        div("Cosmopolitan (derived)", "#e41a1c", "cosmopolitan"),\n'
-            '    ]},\n'
+            "    ]},\n"
             '    "displays": [{"type": "MultiLinearWiggleDisplay",\n'
             '                  "displayId": "diversity-d", "defaultRendering": "multiline"}],\n'
-            '})\n'
+            "})\n"
             'view.add_track(next(t for t in dm6["tracks"] if t["trackId"] == "dm6-ncbiRefSeqCurated"))\n'
-            'view'
+            "view"
         ),
     ],
 )
@@ -493,40 +499,40 @@ save(
             "results table joined to gene coordinates, changes nothing downstream."
         ),
         new_code_cell(
-            'import numpy as np\n'
-            'import pandas as pd\n'
-            'from scipy.stats import ttest_ind\n'
-            'from statsmodels.stats.multitest import multipletests\n\n'
-            'rng = np.random.default_rng(7)\n'
-            'n_genes, n_rep = 80, 4\n'
-            'starts = 1_000_000 + np.arange(n_genes) * 40_000\n\n'
-            'base = rng.uniform(20, 400, n_genes)  # baseline expression per gene\n'
-            'true_lfc = np.zeros(n_genes)\n'
-            'up = rng.choice(n_genes, 6, replace=False)\n'
-            'down = rng.choice(np.setdiff1d(np.arange(n_genes), up), 6, replace=False)\n'
-            'true_lfc[up] = rng.uniform(1.5, 3.0, 6)\n'
-            'true_lfc[down] = -rng.uniform(1.5, 3.0, 6)\n'
-            'ctrl = rng.poisson(base[:, None], size=(n_genes, n_rep))\n'
-            'treat = rng.poisson((base * 2.0**true_lfc)[:, None], size=(n_genes, n_rep))\n\n'
-            'lc, lt = np.log2(ctrl + 1), np.log2(treat + 1)\n'
-            'lfc = lt.mean(1) - lc.mean(1)\n'
-            'padj = multipletests(ttest_ind(lt, lc, axis=1, equal_var=False).pvalue,\n'
+            "import numpy as np\n"
+            "import pandas as pd\n"
+            "from scipy.stats import ttest_ind\n"
+            "from statsmodels.stats.multitest import multipletests\n\n"
+            "rng = np.random.default_rng(7)\n"
+            "n_genes, n_rep = 80, 4\n"
+            "starts = 1_000_000 + np.arange(n_genes) * 40_000\n\n"
+            "base = rng.uniform(20, 400, n_genes)  # baseline expression per gene\n"
+            "true_lfc = np.zeros(n_genes)\n"
+            "up = rng.choice(n_genes, 6, replace=False)\n"
+            "down = rng.choice(np.setdiff1d(np.arange(n_genes), up), 6, replace=False)\n"
+            "true_lfc[up] = rng.uniform(1.5, 3.0, 6)\n"
+            "true_lfc[down] = -rng.uniform(1.5, 3.0, 6)\n"
+            "ctrl = rng.poisson(base[:, None], size=(n_genes, n_rep))\n"
+            "treat = rng.poisson((base * 2.0**true_lfc)[:, None], size=(n_genes, n_rep))\n\n"
+            "lc, lt = np.log2(ctrl + 1), np.log2(treat + 1)\n"
+            "lfc = lt.mean(1) - lc.mean(1)\n"
+            "padj = multipletests(ttest_ind(lt, lc, axis=1, equal_var=False).pvalue,\n"
             '                     method="fdr_bh")[1]\n\n'
-            'de = pd.DataFrame(\n'
-            '    {\n'
+            "de = pd.DataFrame(\n"
+            "    {\n"
             '        "chrom": "7",\n'
             '        "start": starts,\n'
             '        "end": starts + 6_000,\n'
             '        "name": [f"GENE{i:04d}" for i in range(n_genes)],\n'
             '        "log2fc": lfc.round(2),\n'
             '        "padj": padj.round(4),\n'
-            '    }\n'
-            ')\n'
+            "    }\n"
+            ")\n"
             'de["sig"] = np.where(\n'
-            '    (de.padj < 0.05) & (de.log2fc.abs() > 1),\n'
+            "    (de.padj < 0.05) & (de.log2fc.abs() > 1),\n"
             '    np.where(de.log2fc > 0, "up", "down"),\n'
             '    "ns",\n'
-            ')\n'
+            ")\n"
             'de.sort_values("padj").head()'
         ),
         new_markdown_cell(
@@ -535,19 +541,19 @@ save(
             "in the feature details."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView\n\n'
-            'grch38 = {\n'
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "grch38 = {\n"
             '    "name": "GRCh38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    "aliases": ["hg38"],\n'
-            '}\n'
+            "}\n"
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n'
-            'view.add_features(\n'
-            '    de,\n'
+            "view.add_features(\n"
+            "    de,\n"
             '    name="differential expression",\n'
-            '    color="jexl:get(feature,\'sig\') == \'up\' ? \'#c62828\' : get(feature,\'sig\') == \'down\' ? \'#1565c0\' : \'#cfcfcf\'",\n'
-            ')\n'
-            'view'
+            "    color=\"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\",\n"
+            ")\n"
+            "view"
         ),
     ],
 )
@@ -573,18 +579,18 @@ save(
             "accepts a symbol like `BRCA1`, not just a locstring."
         ),
         new_code_cell(
-            'from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n'
+            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
             'hg38 = fetch_hub("hg38")  # sequence + refName aliases + cytobands + search\n\n'
-            'view = LinearGenomeView(\n'
+            "view = LinearGenomeView(\n"
             '    assembly=hg38["assemblies"][0],\n'
             '    aggregate_text_search_adapters=hg38["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
-            ')\n'
-            'view'
+            ")\n"
+            "view"
         ),
         new_markdown_cell(
             "## Add a hosted track\n\n"
-            "`hg38[\"tracks\"]` is a catalog of ready-to-use hosted tracks. Pick "
+            '`hg38["tracks"]` is a catalog of ready-to-use hosted tracks. Pick '
             "one by id and hand it to `add_track` — it's just JSON, no special "
             "API."
         ),
@@ -601,8 +607,8 @@ save(
             "aliasing."
         ),
         new_code_cell(
-            'view.add_track(\n'
-            '    {\n'
+            "view.add_track(\n"
+            "    {\n"
             '        "type": "QuantitativeTrack",\n'
             '        "trackId": "phyloP100way",\n'
             '        "name": "phyloP100way",\n'
@@ -610,9 +616,9 @@ save(
             '        "adapter": {\n'
             '            "type": "BigWigAdapter",\n'
             '            "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
-            '        },\n'
-            '    }\n'
-            ')'
+            "        },\n"
+            "    }\n"
+            ")"
         ),
     ],
 )
@@ -671,12 +677,12 @@ save(
             ")\n\n\n"
             "def classify(pvalue_cutoff, lfc_cutoff=1.0):\n"
             "    sig = np.where(\n"
-            '        (de.pvalue < pvalue_cutoff) & (de.log2fc.abs() > lfc_cutoff),\n'
+            "        (de.pvalue < pvalue_cutoff) & (de.log2fc.abs() > lfc_cutoff),\n"
             '        np.where(de.log2fc > 0, "up", "down"),\n'
             '        "ns",\n'
             "    )\n"
-            '    return de.assign(sig=sig)\n\n\n'
-            'classify(0.01).sig.value_counts()'
+            "    return de.assign(sig=sig)\n\n\n"
+            "classify(0.01).sig.value_counts()"
         ),
         new_markdown_cell(
             "## Wire a slider to the view\n\n"
@@ -695,11 +701,11 @@ save(
             '    "aliases": ["hg38"],\n'
             "}\n"
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
-            'COLOR = "jexl:get(feature,\'sig\') == \'up\' ? \'#c62828\' : get(feature,\'sig\') == \'down\' ? \'#1565c0\' : \'#cfcfcf\'"\n\n\n'
+            "COLOR = \"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\"\n\n\n"
             "def render(pvalue_cutoff):\n"
             "    view.tracks = []  # replace, don't stack\n"
             "    view.add_features(\n"
-            '        classify(pvalue_cutoff),\n'
+            "        classify(pvalue_cutoff),\n"
             '        name=f"DE (p < {pvalue_cutoff:g})",\n'
             '        track_id="de",\n'
             "        color=COLOR,\n"
@@ -761,7 +767,7 @@ save(
             "    n = depth.size // binsize * binsize\n"
             "    binned = depth[:n].reshape(-1, binsize).mean(1).round(1)\n"
             "    starts = start + np.arange(binned.size) * binsize\n"
-            '    return pd.DataFrame(\n'
+            "    return pd.DataFrame(\n"
             '        {"chrom": chrom, "start": starts, "end": starts + binsize, "depth": binned}\n'
             "    )\n\n\n"
             'coverage("chr17", 41_196_312, 41_277_500).head()  # BRCA1'
@@ -769,7 +775,7 @@ save(
         new_markdown_cell(
             "## Recompute on every pan\n\n"
             "`on_location` parses the view's locstring and re-renders coverage for "
-            "that window. `view.observe(..., \"location\")` fires it whenever the "
+            'that window. `view.observe(..., "location")` fires it whenever the '
             "region changes — dragging in the UI or setting `view.location` from "
             "code. A gene-name or whole-chromosome location doesn't parse, and a "
             "window wider than 5 Mb is skipped to keep each per-pan query snappy."
@@ -777,7 +783,7 @@ save(
         new_code_cell(
             "import re\n\n"
             "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
-            "hg19 = fetch_hub(\"hg19\")\n"
+            'hg19 = fetch_hub("hg19")\n'
             "COLOR = \"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\"\n\n\n"
             "def parse_loc(loc):\n"
             '    m = re.match(r"^\\s*([^:\\s]+)\\s*:\\s*([\\d,]+)\\s*\\.\\.\\s*([\\d,]+)", loc or "")\n'
@@ -810,7 +816,7 @@ save(
         ),
         new_code_cell(
             'view.location = "chr17:7,560,000..7,595,000"  # jump to TP53\n'
-            "len(view.tracks[0][\"adapter\"][\"features\"]), \"bins computed for this window\""
+            'len(view.tracks[0]["adapter"]["features"]), "bins computed for this window"'
         ),
     ],
 )
@@ -837,7 +843,7 @@ save(
             "`.fai`/`.gzi` from the URL. The single "
             "`AllVsAllPAFAdapter` track serves every pair from one PAF, so the "
             "three bands between the four rows are all the same trackId "
-            "(`tracks=[[\"ecoli_ava\"]] * 3`, one entry per adjacent pair). "
+            '(`tracks=[["ecoli_ava"]] * 3`, one entry per adjacent pair). '
             "`drawCurves=False` draws straight ribbons; `minAlignmentLength` "
             "hides short noisy blocks."
         ),
@@ -845,7 +851,7 @@ save(
             "from jbrowse_anywidget import JBrowseApp, synteny_view\n\n"
             'BASE = "https://jbrowse.org/demos/ecoli_pangenome"\n'
             'STRAINS = ["K12", "Sakai", "CFT073", "NCTC86"]\n\n'
-            "assemblies = [{\"name\": s, \"uri\": f\"{BASE}/{s}.fa.gz\"} for s in STRAINS]\n\n"
+            'assemblies = [{"name": s, "uri": f"{BASE}/{s}.fa.gz"} for s in STRAINS]\n\n'
             "ecoli_ava = {\n"
             '    "type": "SyntenyTrack",\n'
             '    "trackId": "ecoli_ava",\n'
@@ -872,7 +878,7 @@ save(
         ),
         new_markdown_cell(
             "The same PAF also opens as a **dotplot** — swap `synteny_view` for "
-            "`dotplot_view([\"K12\", \"Sakai\"], tracks=[\"ecoli_ava\"])` to see "
+            '`dotplot_view(["K12", "Sakai"], tracks=["ecoli_ava"])` to see '
             "any one pair whole-genome. To build the PAF from your own genomes "
             "(`minimap2 -c -x asm20 --eqx`) and load per-strain gene tracks "
             "alongside, follow the "

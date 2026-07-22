@@ -98,6 +98,8 @@ pip install -e ".[dev]"
 `pnpm dev` rebuilds the bundle on change, and `pnpm typecheck` runs tsc. Then
 open a notebook from `examples/`. `pytest` covers the Python config builders and
 the Python <-> JS trait contract; neither it nor the bundle build needs network.
+`ruff check` and `ruff format` lint the Python (both run in CI); `examples/` is
+excluded, since those notebooks are generated.
 
 Regenerating the notebooks and figures needs the extra script dependencies
 (`pip install -e ".[dev,scripts]"`):

@@ -104,9 +104,7 @@ def test_sequence_url_assembly_backfills_derived_name():
 
 
 def test_hub_name_assembly_still_backfills_verbatim():
-    view = LinearGenomeView(
-        assembly="GCF_000001405.40", tracks=["https://x.org/r.bam"]
-    )
+    view = LinearGenomeView(assembly="GCF_000001405.40", tracks=["https://x.org/r.bam"])
     assert view.tracks[0]["assemblyNames"] == ["GCF_000001405.40"]
 
 

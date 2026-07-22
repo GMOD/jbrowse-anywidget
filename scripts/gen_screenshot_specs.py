@@ -11,6 +11,7 @@ DataFrame computed in Python becomes a track. Run:
 """
 
 import json
+from pathlib import Path
 
 import anywidget
 import bioframe as bf
@@ -96,7 +97,19 @@ def quickstart():
 
 
 def bioframe_track():
-    cols = "bin chrom start end name length cpgNum gcNum perCpg perGc obsExp".split()
+    cols = [
+        "bin",
+        "chrom",
+        "start",
+        "end",
+        "name",
+        "length",
+        "cpgNum",
+        "gcNum",
+        "perCpg",
+        "perGc",
+        "obsExp",
+    ]
     islands = pd.read_csv(
         "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cpgIslandExt.txt.gz",
         sep="\t",
@@ -241,6 +254,7 @@ specs = {
     "12_dotplot": dotplot(),
     "13_manhattan": manhattan(),
 }
-with open("scripts/screenshot_specs.json", "w") as f:
+out = Path(__file__).resolve().parent / "screenshot_specs.json"
+with out.open("w") as f:
     json.dump(specs, f, indent=2)
-print("wrote scripts/screenshot_specs.json:", ", ".join(specs))
+print(f"wrote {out}:", ", ".join(specs))
