@@ -180,13 +180,7 @@ JBrowse fills in `displayId`:
 
 ```python
 LinearGenomeView(
-    # the hosted hg19 hub has no refName aliases, so spell the assembly out with
-    # its alias file — otherwise a track keyed on `2` finds nothing under `chr2`
-    assembly={
-        "name": "hg19",
-        "uri": "https://jbrowse.org/genomes/hg19/fasta/hg19.fa.gz",
-        "refNameAliases": {"uri": "https://jbrowse.org/genomes/hg19/hg19_aliases.txt"},
-    },
+    assembly="hg19",
     location="2",
     tracks=[{
         "type": "GWASTrack",
