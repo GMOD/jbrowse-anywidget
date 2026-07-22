@@ -30,18 +30,19 @@ HG38 = {
     "aliases": ["GRCh38"],
     "refNameAliases": {"uri": "https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt"},
 }
-HG19 = {
-    "name": "hg19",
-    "uri": "https://jbrowse.org/genomes/hg19/fasta/hg19.fa.gz",
-    "refNameAliases": {
-        "uri": "https://jbrowse.org/genomes/hg19/hg19_aliases.txt"
-    },
-}
 REFSEQ_GFF = (
     "https://jbrowse.org/genomes/GRCh38/ncbi_refseq/"
     "GCA_000001405.15_GRCh38_full_analysis_set.refseq_annotation.sorted.gff.gz"
 )
 
+# the hosted hg19 hub config carries no refNameAliases (hg38's does), so its
+# refNames are reachable only as chrN and a track keyed on bare N draws nothing
+# — spelling the assembly out with its aliases file fixes both
+HG19 = {
+    "name": "hg19",
+    "uri": "https://jbrowse.org/genomes/hg19/fasta/hg19.fa.gz",
+    "refNameAliases": {"uri": "https://jbrowse.org/genomes/hg19/hg19_aliases.txt"},
+}
 VOLVOX = {"name": "volvox", "uri": "https://jbrowse.org/genomes/volvox/volvox.fa.gz"}
 
 VOLVOX_DATA = (
