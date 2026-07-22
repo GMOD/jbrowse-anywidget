@@ -37,6 +37,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
@@ -57,9 +58,12 @@ __all__ = [
     "linear_view",
     "synteny_view",
     "dotplot_view",
+    "protein_view",
     "synteny_track",
     "make_assembly",
     "fetch_hub",
+    "plugin",
+    "PLUGIN_STORE",
 ]
 
 # A JBrowse config object (assembly, track, adapter, …): plain JSON as a dict.
@@ -85,6 +89,7 @@ class LinearGenomeView(anywidget.AnyWidget):
     tracks = traitlets.List().tag(sync=True)
     default_session = traitlets.Dict().tag(sync=True)
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
+    plugins = traitlets.List().tag(sync=True)
 
     # The visible region, synced both ways. Reading it after the user has panned
     # gives back their current location.
@@ -103,6 +108,7 @@ class LinearGenomeView(anywidget.AnyWidget):
         location: str = "",
         tracks: list[TrackEntry] | None = None,
         default_session: JsonDict | None = None,
+        plugins: list[str | JsonDict] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -112,6 +118,8 @@ class LinearGenomeView(anywidget.AnyWidget):
             self.tracks = list(tracks)
         if default_session is not None:
             self.default_session = default_session
+        if plugins is not None:
+            self.plugins = [plugin(p) for p in plugins]
         if location:
             self.location = location
 
@@ -227,6 +235,10 @@ class JBrowseApp(anywidget.AnyWidget):
     Unlike `LinearGenomeView`, `tracks` here are full JBrowse track config dicts
     (a synteny track spans two assemblies, so there's no single-assembly
     shorthand to infer); `synteny_track` builds the common PAF case.
+
+    `plugins=[...]` loads JBrowse plugins at runtime (see `plugin`), which is
+    how view types that don't ship in the bundle — a 3D protein structure, an
+    MSA — become available to `views`.
     """
 
     _esm = _STATIC / "app.js"
@@ -238,6 +250,7 @@ class JBrowseApp(anywidget.AnyWidget):
     assemblies = traitlets.List().tag(sync=True)
     tracks = traitlets.List().tag(sync=True)
     views = traitlets.List().tag(sync=True)
+    plugins = traitlets.List().tag(sync=True)
 
     # Read-back only (JS -> Python), one entry per view in `views`, updated as
     # the user pans/zooms — the same live sync the single-view LinearGenomeView
@@ -257,6 +270,7 @@ class JBrowseApp(anywidget.AnyWidget):
         assemblies: list[JsonDict] | None = None,
         tracks: list[JsonDict] | None = None,
         views: list[JsonDict] | None = None,
+        plugins: list[str | JsonDict] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -266,6 +280,43 @@ class JBrowseApp(anywidget.AnyWidget):
             self.tracks = list(tracks)
         if views is not None:
             self.views = list(views)
+        if plugins is not None:
+            self.plugins = [plugin(p) for p in plugins]
+
+
+PLUGIN_STORE = "https://jbrowse.org/plugin-store/plugins.json"
+
+
+@lru_cache(maxsize=1)
+def _plugin_store() -> dict[str, JsonDict]:
+    with urllib.request.urlopen(PLUGIN_STORE) as response:
+        catalog = json.load(response)
+    return {p["name"]: p for p in catalog["plugins"]}
+
+
+def plugin(spec: str | JsonDict) -> JsonDict:
+    """Resolve a plugin to the `{name, url}` spec the view loads at runtime.
+
+    A dict is passed through (so an unlisted or locally-served plugin is just
+    `{"name": ..., "url": ...}`); a string is looked up in the JBrowse
+    [plugin store](https://jbrowse.org/jb2/plugin_store/) by name, which is how
+    the web app's Tools -> Plugin store installs the same bundle::
+
+        LinearGenomeView(assembly="hg38", plugins=["Protein3d", "MsaView"])
+
+    A plugin registers its own view types, track types, and menu items, so the
+    widget gains whatever it adds (a protein-structure view, an MSA view, ...).
+    """
+    if isinstance(spec, dict):
+        return spec
+    store = _plugin_store()
+    entry = store.get(spec)
+    if entry is None:
+        raise ValueError(
+            f'plugin "{spec}" not found in the plugin store. '
+            f"Available: {', '.join(sorted(store))}"
+        )
+    return {"name": entry["name"], "url": entry["url"]}
 
 
 def linear_view(
@@ -323,6 +374,56 @@ def dotplot_view(
     if tracks is not None:
         blob["tracks"] = list(tracks)
     return {"type": "DotplotView", "init": blob}
+
+
+def protein_view(
+    uniprot_id: str | None = None,
+    transcript_id: str | None = None,
+    url: str | None = None,
+    connected_view: JsonDict | None = None,
+    **init: Any,
+) -> JsonDict:
+    """Describe a 3D protein-structure view (needs the `Protein3d` plugin).
+
+    `uniprot_id` + `transcript_id` is the short form: the plugin derives the
+    AlphaFold structure, finds that transcript in the connected view's tracks,
+    and translates its CDS to align genome positions onto residues. Pass
+    `connected_view` (a `linear_view`-shaped dict of `assembly`/`loc`/`tracks`)
+    and the protein view creates that genome view itself and links the two, so
+    hovering a variant lights up the matching residue::
+
+        JBrowseApp(
+            assemblies=[hub["assemblies"][0]],
+            tracks=hub["tracks"],
+            plugins=["Protein3d"],
+            views=[
+                protein_view(
+                    uniprot_id="P04637",
+                    transcript_id="NM_000546.6",
+                    connected_view={
+                        "assembly": "hg38",
+                        "loc": "chr17:7,668,421-7,687,550",
+                        "tracks": ["hg38-ncbiRefSeq", "clinvar_ncbi_hg38"],
+                    },
+                )
+            ],
+        )
+
+    `url` opens a structure file directly (any PDB/mmCIF), with no genome
+    connection unless you also supply the `feature` and
+    `userProvidedTranscriptSequence` the mapping needs. Extra keyword args ride
+    onto the view's init blob (`height`, `showControls`, `showHighlight`, ...).
+    """
+    blob: JsonDict = {**init}
+    if uniprot_id is not None:
+        blob["uniprotId"] = uniprot_id
+    if transcript_id is not None:
+        blob["transcriptId"] = transcript_id
+    if url is not None:
+        blob["url"] = url
+    if connected_view is not None:
+        blob["connectedView"] = connected_view
+    return {"type": "ProteinView", "init": blob}
 
 
 def synteny_track(

@@ -9,7 +9,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 const require = createRequire(import.meta.url)
 
 const streamWebShim = fileURLToPath(
-  new URL('./src/stream-web-shim.js', import.meta.url),
+  new URL('./src/stream-web-shim.ts', import.meta.url),
 )
 
 // vite-plugin-node-polyfills injects `import 'vite-plugin-node-polyfills/shims/<x>'`
@@ -66,7 +66,7 @@ export default defineConfig({
     // only the first (lgv) build clears the dir; the app build appends to it
     emptyOutDir: !isApp,
     lib: {
-      entry: isApp ? 'src/app.jsx' : 'src/index.jsx',
+      entry: isApp ? 'src/app.ts' : 'src/index.ts',
       formats: ['es'],
       fileName: () => (isApp ? 'app.js' : 'index.js'),
     },
