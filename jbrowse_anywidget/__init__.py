@@ -35,6 +35,7 @@ name or extra config; a `(uri, index)` pair names a non-sibling index inline.
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.error
 import urllib.request
@@ -193,6 +194,13 @@ class LinearGenomeView(anywidget.AnyWidget):
             raise ValueError("no assembly set; pass assembly_name=")
         return name
 
+    @traitlets.observe("assembly")
+    def _backfill_assembly_names(self, change: Any) -> None:
+        # tracks set before the assembly missed the backfill below; re-running
+        # the validator over them fills it in now that a name exists
+        if self.tracks:
+            self.tracks = list(self.tracks)
+
     @traitlets.validate("tracks")
     def _normalize_tracks(self, proposal: Any) -> list[JsonDict]:
         # Each entry is a full JBrowse track config dict, a bare data-file URI,
@@ -288,11 +296,20 @@ class JBrowseApp(anywidget.AnyWidget):
 
 PLUGIN_STORE = "https://jbrowse.org/plugin-store/plugins.json"
 
+# every fetch here happens inside a notebook cell, where an untimed urlopen on a
+# stalled connection hangs the kernel with nothing to show for it
+_TIMEOUT = 30
+
 
 @lru_cache(maxsize=1)
 def _plugin_store() -> dict[str, JsonDict]:
-    with urllib.request.urlopen(PLUGIN_STORE) as response:
-        catalog = json.load(response)
+    try:
+        with urllib.request.urlopen(PLUGIN_STORE, timeout=_TIMEOUT) as response:
+            catalog = json.load(response)
+    except OSError as e:
+        raise ValueError(
+            f"could not reach the plugin store at {PLUGIN_STORE}: {e}"
+        ) from e
     return {p["name"]: p for p in catalog["plugins"]}
 
 
@@ -430,6 +447,10 @@ def _normalize_track(item: TrackEntry) -> JsonDict:
     if isinstance(item, str):
         return {"uri": item}
     if isinstance(item, (tuple, list)):
+        if len(item) != 2:
+            raise ValueError(
+                f"a track entry pair is (uri, index); got {len(item)} items: {item!r}"
+            )
         uri, index = item
         return {"uri": uri, "index": index}
     return item
@@ -485,13 +506,29 @@ def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:
         refname = row.get("refName", row.get("chrom", row.get("chr")))
         if refname is None:
             raise ValueError("each feature needs a refName (or chrom/chr) column")
-        feature = {k: v for k, v in row.items() if k not in ("chrom", "chr")}
+        missing = [c for c in ("start", "end") if c not in row]
+        if missing:
+            raise ValueError(
+                f"feature {i} is missing the {' and '.join(missing)} column"
+            )
+        feature = {
+            k: _json_safe(v) for k, v in row.items() if k not in ("chrom", "chr")
+        }
         feature["refName"] = refname
         feature["start"] = int(row["start"])
         feature["end"] = int(row["end"])
         feature["uniqueId"] = f"{track_id}-{i}"
         out.append(feature)
     return out
+
+
+def _json_safe(value: Any) -> Any:
+    # a missing value in a pandas column arrives as float NaN, which json.dumps
+    # writes as bare `NaN` — invalid JSON that the kernel's packer rejects, so
+    # one empty cell would break the whole sync. null is what JSON has instead.
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def _rows(features: FeatureSource) -> list[JsonDict]:
@@ -556,13 +593,16 @@ def fetch_hub(hub: str) -> JsonDict:
     else:
         url = f"{_GENOMES}/ucsc/{hub}/config.json"
     try:
-        with urllib.request.urlopen(url) as response:
+        with urllib.request.urlopen(url, timeout=_TIMEOUT) as response:
             config = json.load(response)
     except urllib.error.HTTPError as e:
         raise ValueError(
             f'hub "{hub}" not found ({e.code} from {url}). '
             "See https://genomes.jbrowse.org for available assemblies."
         ) from e
+    except OSError as e:
+        # a DNS failure, refused connection, or timeout — not a missing hub
+        raise ValueError(f'could not fetch hub "{hub}" from {url}: {e}') from e
     # Hosted configs reference data with URIs relative to the config's own
     # location; stamp each with baseUri so they resolve (the same pass
     # jbrowse-web runs when it loads a config from a URL).

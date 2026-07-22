@@ -23,6 +23,20 @@ def test_view_drops_unset_init_fields():
     }
 
 
+def test_linear_view_carries_loc_tracks_and_extra_init():
+    assert linear_view(
+        "hg38", loc="chr1:1..100", tracks=["genes"], colorByCDS=True
+    ) == {
+        "type": "LinearGenomeView",
+        "init": {
+            "assembly": "hg38",
+            "loc": "chr1:1..100",
+            "tracks": ["genes"],
+            "colorByCDS": True,
+        },
+    }
+
+
 def test_synteny_view_expands_assembly_names_into_panels():
     assert synteny_view(["hg38", "mm39"], tracks=["paf"], cigar_mode="full") == {
         "type": "LinearSyntenyView",

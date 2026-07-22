@@ -7,6 +7,8 @@ and the assemblyNames backfill — the extension inference itself is core's, and
 core owns those tests.
 """
 
+import pytest
+
 from jbrowse_anywidget import LinearGenomeView, track
 
 
@@ -106,3 +108,17 @@ def test_hub_name_assembly_still_backfills_verbatim():
         assembly="GCF_000001405.40", tracks=["https://x.org/r.bam"]
     )
     assert view.tracks[0]["assemblyNames"] == ["GCF_000001405.40"]
+
+
+def test_assembly_set_after_tracks_backfills_them():
+    # the backfill runs when tracks are validated, so an assembly that arrives
+    # later has to reach back over the tracks already set
+    view = LinearGenomeView(tracks=["https://x.org/r.bam"])
+    assert "assemblyNames" not in view.tracks[0]
+    view.assembly = "hg38"
+    assert view.tracks[0]["assemblyNames"] == ["hg38"]
+
+
+def test_track_entry_pair_of_wrong_length_is_reported():
+    with pytest.raises(ValueError, match="uri, index"):
+        LinearGenomeView(tracks=[("a.bam", "a.bai", "extra")])
