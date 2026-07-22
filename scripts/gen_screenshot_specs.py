@@ -12,6 +12,7 @@ DataFrame computed in Python becomes a track. Run:
 
 import json
 
+import anywidget
 import bioframe as bf
 import pandas as pd
 
@@ -50,20 +51,31 @@ VOLVOX_DATA = (
 )
 
 
-def lgv_spec(view, caption):
+def traits_of(widget):
+    """Every trait the widget itself syncs to JS, read off the widget.
+
+    Derived rather than listed: the harness fakes the anywidget model, so a
+    trait missing from the spec reads back as `undefined` in the bundle and the
+    render dies — which is exactly what happened when `plugins` was added and
+    the hand-written lists here weren't. Scope is our own classes: walk up to
+    (not into) AnyWidget, since ipywidgets' inherited `layout`/`tabbable`/
+    `tooltip` are not ours and not JSON. anywidget subclasses each instance to
+    hold `_esm`/`_css`, hence the underscore filter.
+    """
+    names = set()
+    for cls in type(widget).__mro__:
+        if cls is anywidget.AnyWidget:
+            break
+        names |= set(cls.class_own_traits(sync=True))
     return {
-        "bundle": "index.js",
-        "caption": caption,
-        "traits": {
-            "assembly": view.assembly,
-            "tracks": view.tracks,
-            "default_session": view.default_session,
-            "location": view.location,
-            "aggregate_text_search_adapters": view.aggregate_text_search_adapters,
-            "plugins": view.plugins,
-            "selected_feature": None,
-        },
+        name: getattr(widget, name)
+        for name in sorted(names)
+        if not name.startswith("_")
     }
+
+
+def lgv_spec(view, caption):
+    return {"bundle": "index.js", "caption": caption, "traits": traits_of(view)}
 
 
 def app_spec(app, caption, headed=False):
@@ -72,14 +84,7 @@ def app_spec(app, caption, headed=False):
         "caption": caption,
         # molstar's 3D canvas needs a real GPU, so this one renders in a window
         "headed": headed,
-        "traits": {
-            "assemblies": app.assemblies,
-            "tracks": app.tracks,
-            "views": app.views,
-            "plugins": app.plugins,
-            "view_locations": [],
-            "selected_feature": None,
-        },
+        "traits": traits_of(app),
     }
 
 

@@ -11,3 +11,6 @@ __pycache__/
 
 # generated screenshot intermediate (from gen_screenshot_specs.py)
 scripts/screenshot_specs.json
+
+# the package installs with pip; a uv lock is whatever a contributor ran locally
+uv.lock
