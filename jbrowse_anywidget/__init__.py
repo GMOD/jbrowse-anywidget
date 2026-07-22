@@ -55,6 +55,7 @@ __all__ = [
     "LinearGenomeView",
     "JBrowseApp",
     "track",
+    "view",
     "linear_view",
     "synteny_view",
     "dotplot_view",
@@ -170,13 +171,8 @@ class LinearGenomeView(anywidget.AnyWidget):
             },
         }
         if color:
-            track["displays"] = [
-                {
-                    "type": "LinearBasicDisplay",
-                    "displayId": f"{track_id}-LinearBasicDisplay",
-                    "color": color,
-                }
-            ]
+            # displayId is derived from the trackId by core, so it stays out
+            track["displays"] = [{"type": "LinearBasicDisplay", "color": color}]
         self.add_track(track)
 
     def _resolved_assembly_name(self) -> str | None:
@@ -319,6 +315,21 @@ def plugin(spec: str | JsonDict) -> JsonDict:
     return {"name": entry["name"], "url": entry["url"]}
 
 
+def view(type: str, **init: Any) -> JsonDict:
+    """Describe any view for `JBrowseApp(views=[...])`.
+
+    The general form behind `linear_view`, `synteny_view`, `dotplot_view`, and
+    `protein_view`: builds the `{"type", "init"}` dict any view type
+    understands, where `init` is the declarative [session-spec
+    init](https://jbrowse.org/jb2/docs/urlparams/#session-spec) for that type,
+    with `None` values dropped. Use it for view types those helpers don't cover
+    — a plugin's circular view, say::
+
+        view("CircularView", assembly="hg19", tracks=["pairs"])
+    """
+    return {"type": type, "init": _drop_none(init)}
+
+
 def linear_view(
     assembly: str,
     loc: str | None = None,
@@ -330,12 +341,7 @@ def linear_view(
     `tracks` are trackIds (referencing `JBrowseApp`'s `tracks`); extra keyword
     args ride onto the view's init blob (e.g. `colorByCDS=True`).
     """
-    blob: JsonDict = {"assembly": assembly, **init}
-    if loc is not None:
-        blob["loc"] = loc
-    if tracks is not None:
-        blob["tracks"] = list(tracks)
-    return {"type": "LinearGenomeView", "init": blob}
+    return view("LinearGenomeView", assembly=assembly, loc=loc, tracks=tracks, **init)
 
 
 def _panels(assemblies: list[str] | list[JsonDict]) -> list[JsonDict]:
@@ -356,12 +362,13 @@ def synteny_view(
     dicts, to focus each panel on a region); `tracks` are the synteny trackIds
     tying them together. `cigar_mode` is `"full"`/`"matches"`/`"off"`.
     """
-    blob: JsonDict = {"views": _panels(assemblies), **init}
-    if tracks is not None:
-        blob["tracks"] = list(tracks)
-    if cigar_mode is not None:
-        blob["cigarMode"] = cigar_mode
-    return {"type": "LinearSyntenyView", "init": blob}
+    return view(
+        "LinearSyntenyView",
+        views=_panels(assemblies),
+        tracks=tracks,
+        cigarMode=cigar_mode,
+        **init,
+    )
 
 
 def dotplot_view(
@@ -370,10 +377,7 @@ def dotplot_view(
     **init: Any,
 ) -> JsonDict:
     """Describe a `DotplotView` comparing two assemblies via a synteny track."""
-    blob: JsonDict = {"views": _panels(assemblies), **init}
-    if tracks is not None:
-        blob["tracks"] = list(tracks)
-    return {"type": "DotplotView", "init": blob}
+    return view("DotplotView", views=_panels(assemblies), tracks=tracks, **init)
 
 
 def protein_view(
@@ -414,16 +418,14 @@ def protein_view(
     `userProvidedTranscriptSequence` the mapping needs. Extra keyword args ride
     onto the view's init blob (`height`, `showControls`, `showHighlight`, ...).
     """
-    blob: JsonDict = {**init}
-    if uniprot_id is not None:
-        blob["uniprotId"] = uniprot_id
-    if transcript_id is not None:
-        blob["transcriptId"] = transcript_id
-    if url is not None:
-        blob["url"] = url
-    if connected_view is not None:
-        blob["connectedView"] = connected_view
-    return {"type": "ProteinView", "init": blob}
+    return view(
+        "ProteinView",
+        uniprotId=uniprot_id,
+        transcriptId=transcript_id,
+        url=url,
+        connectedView=connected_view,
+        **init,
+    )
 
 
 def synteny_track(
@@ -480,28 +482,36 @@ def make_assembly(
     publishes) so a track whose reference names differ from the sequence — e.g. a
     BAM using `chr1` against a `1`-named reference — still lines up.
     """
-    assembly: JsonDict = {"name": name, "aliases": aliases if aliases else []}
-    if fai_uri or gzi_uri:
-        # a non-sibling index has no home in the flat shorthand, so fall back to
-        # the sequence.adapter form; the bare `uri` there still infers the type
-        adapter: JsonDict = {"uri": fasta_uri}
-        if fai_uri:
-            adapter["faiLocation"] = {"uri": fai_uri}
-        if gzi_uri:
-            adapter["gziLocation"] = {"uri": gzi_uri}
-        assembly["sequence"] = {
+    # a non-sibling index has no home in the flat shorthand, so it falls back to
+    # the sequence.adapter form; the bare `uri` there still infers the type
+    sequence = (
+        {
             "type": "ReferenceSequenceTrack",
             "trackId": f"{name}-ReferenceSequenceTrack",
-            "adapter": adapter,
+            "adapter": _drop_none(
+                {
+                    "uri": fasta_uri,
+                    "faiLocation": {"uri": fai_uri} if fai_uri else None,
+                    "gziLocation": {"uri": gzi_uri} if gzi_uri else None,
+                }
+            ),
         }
-    else:
-        # flat shorthand: core expands { name, uri } into the full sequence track
-        assembly["uri"] = fasta_uri
-    if refname_aliases_uri:
-        # same bare `{ uri }` shorthand: the alias file is always a
-        # RefNameAliasAdapter, so its type and the adapter nesting are boilerplate
-        assembly["refNameAliases"] = {"uri": refname_aliases_uri}
-    return assembly
+        if fai_uri or gzi_uri
+        else None
+    )
+    return _drop_none(
+        {
+            "name": name,
+            "aliases": aliases if aliases else [],
+            # flat shorthand: core expands { name, uri } into the sequence track,
+            # and the same bare { uri } into a RefNameAliasAdapter
+            "uri": None if sequence else fasta_uri,
+            "sequence": sequence,
+            "refNameAliases": (
+                {"uri": refname_aliases_uri} if refname_aliases_uri else None
+            ),
+        }
+    )
 
 
 def _normalize_track(item: TrackEntry) -> JsonDict:
@@ -549,16 +559,16 @@ def track(
     `assembly_name=` sets assemblyNames; left off, the view backfills it from its
     own assembly.
     """
-    spec = {"uri": uri, **extra}
-    if name is not None:
-        spec["name"] = name
-    if track_id is not None:
-        spec["trackId"] = track_id
-    if index is not None:
-        spec["index"] = index
-    if assembly_name is not None:
-        spec["assemblyNames"] = [assembly_name]
-    return spec
+    return _drop_none(
+        {
+            "uri": uri,
+            "name": name,
+            "trackId": track_id,
+            "index": index,
+            "assemblyNames": [assembly_name] if assembly_name else None,
+            **extra,
+        }
+    )
 
 
 def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:
@@ -582,6 +592,12 @@ def _rows(features: FeatureSource) -> list[JsonDict]:
     if hasattr(features, "to_dict"):
         return features.to_dict(orient="records")
     return list(features)
+
+
+def _drop_none(blob: JsonDict) -> JsonDict:
+    # a config blob carries only the fields that were set; an absent one is
+    # omitted rather than sent as null, so core's own default applies
+    return {k: v for k, v in blob.items() if v is not None}
 
 
 def _slug(text: str) -> str:

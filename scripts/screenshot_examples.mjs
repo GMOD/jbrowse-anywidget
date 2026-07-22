@@ -20,6 +20,15 @@ const from =
   new URL('../../jbrowse-components/package.json', import.meta.url).pathname
 const puppeteer = createRequire(from)('puppeteer')
 
+// readiness waits come from the same checkout's @jbrowse/browser-test-utils, so
+// a capture here uses the identical signals the jbrowse-web browser tests and
+// the website screenshot generator use (display `-done` test-ids, the loading
+// overlay, visible "Loading…" banners) instead of a bespoke sleep
+const { waitForDisplaysDone, waitForLoadingComplete, waitForQuiescent } =
+  await import(
+    new URL('packages/browser-test-utils/src/waits.ts', `file://${from}`).href
+  )
+
 const REPO = new URL('..', import.meta.url).pathname
 const specs = JSON.parse(
   await readFile(join(REPO, 'scripts/screenshot_specs.json'), 'utf8'),
@@ -36,6 +45,7 @@ const TYPES = {
 // seeded from window.__traits — the same {get,set,on,off,save_changes} surface
 // src/index.jsx and src/app.jsx use.
 const harness = `<!doctype html><html><head><meta charset="utf8">
+<link rel="stylesheet" href="/jbrowse_anywidget/static/jbrowse-anywidget.css">
 <style>html,body{margin:0}#root{width:1000px}</style></head><body>
 <div id="root"></div>
 <script type="module">
@@ -84,8 +94,14 @@ const browser = await puppeteer.launch({
   ],
 })
 
+// name arguments re-shoot just those specs: node scripts/screenshot_examples.mjs 03_alignments
+const only = new Set(process.argv.slice(2))
+
 let failed = 0
 for (const [name, spec] of Object.entries(specs)) {
+  if (only.size && !only.has(name)) {
+    continue
+  }
   const tall = spec.bundle === 'app.js'
   const page = await browser.newPage()
   await page.setViewport({ width: 1000, height: tall ? 760 : 440, deviceScaleFactor: 2 })
@@ -106,8 +122,11 @@ for (const [name, spec] of Object.entries(specs)) {
     await page.close()
     continue
   }
-  // settle: let the worker fetch + the GPU/canvas paint land
-  await new Promise(r => setTimeout(r, 6000))
+  // ready when the loading overlay is gone, no "Downloading…"/"Loading…" status
+  // text remains, and every display has flipped to its `-done` test-id
+  await waitForLoadingComplete(page, { waitForDownloads: true, timeout: 90000 })
+  await waitForQuiescent(page, { timeout: 90000 })
+  await waitForDisplaysDone(page, 90000)
   const out = join(REPO, 'images', `${name}.png`)
   await page.screenshot({ path: out })
   console.log(`✓ ${name} -> images/${name}.png${errors.length ? `  (${errors.length} page errors)` : ''}`)

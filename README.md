@@ -11,16 +11,37 @@ just a Vite-bundled ESM file loaded by anywidget.
 
 ## What it looks like
 
-A linear view with a conservation bigWig (quickstart), a bioframe interval
-result dropped onto the genome (CpG islands + shores), and a four-genome synteny
-view from `JBrowseApp` — all rendered headless from the built bundle by
-`scripts/screenshot_examples.mjs`:
+Every figure below is rendered headless from the built bundle by
+`scripts/screenshot_examples.mjs`, out of the declarative config in
+`scripts/gen_screenshot_specs.py` — so they show what the notebooks actually
+produce, not a mock-up.
+
+A linear view with a conservation bigWig ([quickstart notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)):
 
 ![quickstart: assembly + phyloP bigWig](images/01_quickstart.png)
 
+A bioframe interval result dropped onto the genome — CpG islands colored by GC%,
+plus their shores ([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)):
+
 ![bioframe result: CpG islands colored by GC%, with their shores](images/02_bioframe.png)
 
+GPU-rendered CRAM alignments over BRCA1, from a hub assembly named by string
+([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)):
+
+![NA12878 exome CRAM at BRCA1, coverage plus reads](images/03_alignments.png)
+
+Multi-sample structural variants, one row per sample, colored by cohort
+([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)):
+
+![multi-sample SV band display colored by population](images/04_variants.png)
+
+Four E. coli strains compared with an all-vs-all PAF, and the same alignment as
+a dotplot — both from `JBrowseApp`
+([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/11_synteny_ecoli.ipynb)):
+
 ![synteny: four E. coli strains compared with an all-vs-all PAF](images/11_synteny.png)
+
+![dotplot of K12 vs Sakai from the same PAF](images/12_dotplot.png)
 
 ## Try it in Colab
 
@@ -166,6 +187,8 @@ LinearGenomeView(
     }],
 )
 ```
+
+![GWAS summary statistics drawn as a Manhattan plot across chromosome 2](images/13_manhattan.png)
 
 JBrowse's [config guide](https://jbrowse.org/jb2/docs/config_guide/) and the
 per-type [config docs](https://jbrowse.org/jb2/docs/config/) cover many such

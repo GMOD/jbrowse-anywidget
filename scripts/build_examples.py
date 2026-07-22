@@ -198,11 +198,11 @@ save(
             'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
             'grch38 = make_assembly(\n'
             '    "GRCh38",\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    aliases=["hg38"],\n'
             ')\n\n'
             'cram = (\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/alignments/NA12878/"\n'
+            '    "https://jbrowse.org/genomes/GRCh38/alignments/NA12878/"\n'
             '    "NA12878.alt_bwamem_GRCh38DH.20150826.CEU.exome.cram"\n'
             ')\n\n'
             'view = LinearGenomeView(\n'
@@ -536,7 +536,7 @@ save(
             'from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n'
             'grch38 = make_assembly(\n'
             '    "GRCh38",\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    aliases=["hg38"],\n'
             ')\n'
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n'
@@ -689,7 +689,7 @@ save(
             "from jbrowse_anywidget import LinearGenomeView, make_assembly\n\n"
             "grch38 = make_assembly(\n"
             '    "GRCh38",\n'
-            '    "https://s3.amazonaws.com/jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
+            '    "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    aliases=["hg38"],\n'
             ")\n"
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
