@@ -94,44 +94,68 @@ const browser = await puppeteer.launch({
   ],
 })
 
+const READY_TIMEOUT = 90000
+
+// ready when the loading overlay is gone, no "Downloading…"/"Loading…" status
+// text remains, and every display has flipped to its `-done` test-id
+async function waitForReady(page) {
+  await waitForLoadingComplete(page, {
+    waitForDownloads: true,
+    timeout: READY_TIMEOUT,
+  })
+  await waitForQuiescent(page, { timeout: READY_TIMEOUT })
+  await waitForDisplaysDone(page, READY_TIMEOUT)
+}
+
+// Render one spec in a fresh page and write its figure. Returns the page errors
+// it collected, or null when the widget never painted a canvas at all.
+async function capture(name, spec) {
+  const tall = spec.bundle === 'app.js'
+  const page = await browser.newPage()
+  const errors = []
+  try {
+    await page.setViewport({
+      width: 1000,
+      height: tall ? 760 : 440,
+      deviceScaleFactor: 2,
+    })
+    page.on('pageerror', e => errors.push(String(e)))
+    await page.evaluateOnNewDocument(t => { window.__traits = t }, spec.traits)
+    await page.goto(`http://localhost:${port}/harness.html?bundle=${spec.bundle}`, {
+      waitUntil: 'load',
+      timeout: 60000,
+    })
+    try {
+      await page.waitForFunction(() => window.__rendered === true, { timeout: 30000 })
+      await page.waitForSelector('#root canvas', { timeout: 45000 })
+    } catch (e) {
+      console.error(`✗ ${name}: never rendered — ${e.message}`)
+      if (errors.length) console.error('  page errors:', errors.slice(0, 3).join(' | '))
+      return null
+    }
+    await waitForReady(page)
+    await page.screenshot({ path: join(REPO, 'images', `${name}.png`) })
+    return errors
+  } finally {
+    await page.close()
+  }
+}
+
 // name arguments re-shoot just those specs: node scripts/screenshot_examples.mjs 03_alignments
 const only = new Set(process.argv.slice(2))
-
 let failed = 0
+
 for (const [name, spec] of Object.entries(specs)) {
   if (only.size && !only.has(name)) {
     continue
   }
-  const tall = spec.bundle === 'app.js'
-  const page = await browser.newPage()
-  await page.setViewport({ width: 1000, height: tall ? 760 : 440, deviceScaleFactor: 2 })
-  const errors = []
-  page.on('pageerror', e => errors.push(String(e)))
-  await page.evaluateOnNewDocument(t => { window.__traits = t }, spec.traits)
-  await page.goto(`http://localhost:${port}/harness.html?bundle=${spec.bundle}`, {
-    waitUntil: 'load',
-    timeout: 60000,
-  })
-  try {
-    await page.waitForFunction(() => window.__rendered === true, { timeout: 30000 })
-    await page.waitForSelector('#root canvas', { timeout: 45000 })
-  } catch (e) {
-    console.error(`✗ ${name}: never rendered — ${e.message}`)
-    if (errors.length) console.error('  page errors:', errors.slice(0, 3).join(' | '))
+  const errors = await capture(name, spec)
+  if (errors === null) {
     failed++
-    await page.close()
-    continue
+  } else {
+    console.log(`✓ ${name} -> images/${name}.png${errors.length ? `  (${errors.length} page errors)` : ''}`)
+    if (errors.length) console.error('  ', errors.slice(0, 2).join(' | '))
   }
-  // ready when the loading overlay is gone, no "Downloading…"/"Loading…" status
-  // text remains, and every display has flipped to its `-done` test-id
-  await waitForLoadingComplete(page, { waitForDownloads: true, timeout: 90000 })
-  await waitForQuiescent(page, { timeout: 90000 })
-  await waitForDisplaysDone(page, 90000)
-  const out = join(REPO, 'images', `${name}.png`)
-  await page.screenshot({ path: out })
-  console.log(`✓ ${name} -> images/${name}.png${errors.length ? `  (${errors.length} page errors)` : ''}`)
-  if (errors.length) console.error('  ', errors.slice(0, 2).join(' | '))
-  await page.close()
 }
 
 await browser.close()
