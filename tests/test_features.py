@@ -68,6 +68,18 @@ def test_missing_coordinate_is_reported():
         features_track([{"refName": "chr1", "start": 0}])
 
 
+def test_duplicate_track_id_is_refused():
+    # calling this twice without a name is the easy way to collide, and two
+    # tracks sharing a trackId break the view rather than showing both
+    view = LinearGenomeView(assembly="hg38")
+    rows = [{"refName": "chr1", "start": 0, "end": 1}]
+    view.add_features(rows)
+    with pytest.raises(ValueError, match="already on this view"):
+        view.add_features(rows)
+    view.add_features(rows, name="other")
+    assert [t["trackId"] for t in view.tracks] == ["features", "other"]
+
+
 def test_assembly_name_is_required_when_the_view_has_none():
     view = LinearGenomeView()
     with pytest.raises(ValueError, match="assembly_name"):

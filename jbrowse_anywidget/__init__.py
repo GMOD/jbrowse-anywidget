@@ -160,6 +160,13 @@ class LinearGenomeView(anywidget.AnyWidget):
         "jexl:get(feature,'score') > 0 ? 'red' : 'blue'".
         """
         track_id = track_id if track_id else _slug(name)
+        if any(t.get("trackId") == track_id for t in self.tracks):
+            # two tracks sharing a trackId collide in the view; calling this
+            # twice with the default name is the easy way into that
+            raise ValueError(
+                f'a track with trackId "{track_id}" is already on this view; '
+                "pass a different name= or track_id="
+            )
         track = {
             "type": "FeatureTrack",
             "trackId": track_id,
