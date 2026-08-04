@@ -72,8 +72,13 @@ isn't about them; `git checkout images/` after a verification run.
   code-block formatting is newer than the pinned `astral-sh/ruff-action@v3`. Check
   whether CI is actually red before "fixing" it, since reformatting the README to
   suit a newer ruff may just move the failure.
-- **CI still never builds the bundle.** `test.yml` runs pytest, ruff and
-  prettier. See the IDEAS entry — but note its premise is wrong, see below.
+- ~~CI never builds the bundle~~ — done. `test.yml` now has `bundle` and
+  `typecheck` jobs, on push/PR and a nightly cron. What it still lacks is a
+  browser render job; the harness exists (`scripts/screenshot_examples.mjs`)
+  and is the only thing that exercises the blob read path, but it needs
+  `gen_screenshot_specs.py` run first (specs are gitignored),
+  `PUPPETEER_FROM=<workspace>/jbrowse-components/package.json`, and real network
+  to jbrowse.org and UCSC — so it is the flaky one. Nightly-only would suit it.
 
 ## Work that exists but did not land
 
