@@ -10,34 +10,35 @@ dict handed to JBrowse.
 
 The public surface is six names, and each earns its place by that bar:
 
-| | why it survives |
-|---|---|
-| `LinearGenomeView`, `JBrowseApp` | the widgets |
-| `add_features` / `features_track` | a DataFrame is not JSON |
-| `add_local_file` | bytes are not JSON |
-| `fetch_hub`, `plugin` | a network fetch is not JSON |
+|                                   | why it survives             |
+| --------------------------------- | --------------------------- |
+| `LinearGenomeView`, `JBrowseApp`  | the widgets                 |
+| `add_features` / `features_track` | a DataFrame is not JSON     |
+| `add_local_file`                  | bytes are not JSON          |
+| `fetch_hub`, `plugin`             | a network fetch is not JSON |
 
 `track`, `view`, `linear_view`, `synteny_view`, `dotplot_view`, `synteny_track`,
 `make_assembly` and `protein_view` were all deleted: each returned a dict
 literal, and each had to grow whenever JBrowse gained a type. If you are about
 to add a helper that shapes config, don't — put the dict in the docs instead.
-The payoff is that a view type, adapter or display JBrowse adds needs **nothing**
-here.
+The payoff is that a view type, adapter or display JBrowse adds needs
+**nothing** here.
 
 ## Traps
 
-**`resolve.dedupe` makes this repo's version win.** `mobx` is deduped against the
-linked monorepo checkout, so the version in `package.json` is not a local
+**`resolve.dedupe` makes this repo's version win.** `mobx` is deduped against
+the linked monorepo checkout, so the version in `package.json` is not a local
 preference — it must track the monorepo's. A monorepo bump breaks `pnpm build`
 here and nothing else notices. This is exactly how mobx 6-vs-7 sat broken for
 two weeks (`"compareStructural" is not exported`).
 
 **No Node polyfills, on purpose.** The bundle has no `Buffer` and every
-`process` read is behind a `typeof process` guard, so `vite-plugin-node-polyfills`
-was deleted; only `define: {'process.env.NODE_ENV'}` remains. It cost ~1.3MB.
-Don't reinstate it on a "process is not defined" — check the guard first. If you
-add an assertion for this, note that `grep 'Buffer\.'` matches `ArrayBuffer.isView`
-and `dataBuffer.destroy`; use `grep -E '(^|[^A-Za-z0-9_$])Buffer\.'`.
+`process` read is behind a `typeof process` guard, so
+`vite-plugin-node-polyfills` was deleted; only
+`define: {'process.env.NODE_ENV'}` remains. It cost ~1.3MB. Don't reinstate it
+on a "process is not defined" — check the guard first. If you add an assertion
+for this, note that `grep 'Buffer\.'` matches `ArrayBuffer.isView` and
+`dataBuffer.destroy`; use `grep -E '(^|[^A-Za-z0-9_$])Buffer\.'`.
 
 **esbuild does not typecheck.** `pnpm build` succeeding proves nothing about
 types — a missing import ships happily and fails at runtime. That happened this
@@ -47,18 +48,18 @@ session (`getSessionSnapshot` unimported in `src/app.ts`, caught only once
 **`assemblyNames` is the view's job, not Python's.** The view stamps its own
 resolved assembly onto any track that omits it, and knows that name even when
 `assembly=` was a hub name it had to fetch. Stamping it here cannot survive
-`view.assembly = ...`, because the view only fills an *absent* `assemblyNames` —
+`view.assembly = ...`, because the view only fills an _absent_ `assemblyNames` —
 the stale stamp wins and the track silently stops displaying. There is a test.
 
-**jsdom cannot test the blob path.** Its `Blob.slice()` returns an object with no
-`arrayBuffer()`, so `generic-filehandle2` cannot read from it. The byte-range
+**jsdom cannot test the blob path.** Its `Blob.slice()` returns an object with
+no `arrayBuffer()`, so `generic-filehandle2` cannot read from it. The byte-range
 read is covered by `scripts/screenshot_examples.mjs` (`05_local_file`, which
-draws a tabix BED *and* a bigWig — the bigWig is the strong one, since it can
+draws a tabix BED _and_ a bigWig — the bigWig is the strong one, since it can
 only render if the blob is genuinely random-access) and by product-core's
 `localFiles.test.ts`.
 
-**`score` is the magic column.** `add_features` builds a `QuantitativeTrack` —
-a real wiggle with a value axis — only when a column is literally named `score`.
+**`score` is the magic column.** `add_features` builds a `QuantitativeTrack` — a
+real wiggle with a value axis — only when a column is literally named `score`.
 `depth`/`signal` render as boxes. `quantitative=` overrides.
 
 **Screenshot images are timing-dependent.** Re-rendering produces byte-different
@@ -67,15 +68,33 @@ isn't about them; `git checkout images/` after a verification run.
 
 ## Known broken / unresolved
 
-- **`ruff format --check` fails on `README.md`.** Pre-existing on main, and it
-  reproduces with ruff 0.16.1 locally. Almost certainly version drift — markdown
-  code-block formatting is newer than the pinned `astral-sh/ruff-action@v3`. Check
-  whether CI is actually red before "fixing" it, since reformatting the README to
-  suit a newer ruff may just move the failure.
-- ~~CI never builds the bundle~~ — done. `test.yml` now has `bundle` and
-  `typecheck` jobs, on push/PR and a nightly cron. What it still lacks is a
-  browser render job; the harness exists (`scripts/screenshot_examples.mjs`)
-  and is the only thing that exercises the blob read path, but it needs
+- **`bundle` and `typecheck` cannot go green yet — they build against upstream
+  `GMOD/jbrowse-components` main, and this repo uses embedded APIs that have not
+  been pushed there.** The local monorepo checkout these repos are developed
+  against is ~360 commits ahead of upstream main, and every one of these lives
+  only in it:
+
+  | missing upstream                                | used by        |
+  | ----------------------------------------------- | -------------- |
+  | `getSessionSnapshot` from `@jbrowse/react-app2` | `src/app.ts`   |
+  | `session` on `CreateAppOptions`                 | `src/app.ts`   |
+  | `setSession` on `JBrowseAppController`          | `src/app.ts`   |
+  | `localFiles` on `CreateLinearGenomeViewOptions` | `src/index.ts` |
+  | `addLocalFiles` on `LinearGenomeViewController` | `src/index.ts` |
+
+  So the red X is a true signal, not a broken workflow: it is measuring the gap
+  between what this repo needs and what a user installing from upstream would
+  get. It clears when the monorepo commits land — nothing in _this_ repo can fix
+  it, and weakening the job to make it green would throw away the only check
+  that notices. `typecheck` additionally reports four `Cannot find name 'jest'`
+  errors from upstream's own source (`environment.ts`, `ViewHeader.tsx`,
+  `useAssemblySelection.ts`, `useRecentLocations.ts`): the local monorepo
+  already deleted those `typeof jest` guards, so they clear on the same push.
+  Don't "fix" them here by loosening `types: []` in `tsconfig.json`.
+
+- **No browser render job in CI.** `test.yml` builds and typechecks the bundle;
+  nothing renders it. The harness exists (`scripts/screenshot_examples.mjs`) and
+  is the only thing that exercises the blob read path, but it needs
   `gen_screenshot_specs.py` run first (specs are gitignored),
   `PUPPETEER_FROM=<workspace>/jbrowse-components/package.json`, and real network
   to jbrowse.org and UCSC — so it is the flaky one. Nightly-only would suit it.
@@ -83,18 +102,18 @@ isn't about them; `git checkout images/` after a verification run.
 ## Work that exists but did not land
 
 Tagged locally as **`wip/embedded-session-work`** (`bde1fd6`), cut before main
-diverged, so it does *not* apply cleanly — it predates the TypeScript entrypoint
+diverged, so it does _not_ apply cleanly — it predates the TypeScript entrypoint
 migration and the generic `view()`. Treat it as a reference, not a patch:
 
 - `examples/12_large_data.ipynb` — 2.1M NCBI RefSeq exons, measuring ~207MB
   inlined against 3.9MB as tabix. Executes clean.
-- `examples/13_large_wiggle.ipynb` — the three routes for signal, measured on one
-  chr1 track: inlined ~233MB, bigWig 21MB, recompute-per-region ~9–148KB *per
-  view* with no ceiling.
+- `examples/13_large_wiggle.ipynb` — the three routes for signal, measured on
+  one chr1 track: inlined ~233MB, bigWig 21MB, recompute-per-region ~9–148KB
+  _per view_ with no ceiling.
 - `examples/marimo/large_wiggle.py` — the reactive case, where reading
-  `view.location` in a cell *is* the subscription, so the observe/callback wiring
-  disappears. `marimo export html <file>` runs every cell headless, which is a
-  better widget check than nbconvert. Verified working.
+  `view.location` in a cell _is_ the subscription, so the observe/callback
+  wiring disappears. `marimo export html <file>` runs every cell headless, which
+  is a better widget check than nbconvert. Verified working.
 
 Both notebooks depend on `add_local_file`, which is on main, so they port with
 only import/API updates.
@@ -102,11 +121,11 @@ only import/API updates.
 **marimo WASM (`export html-wasm`) was tried and abandoned.** Wheel builds,
 micropip installs it, marimo boots — widget never renders, no error surfaced.
 Blocked for real deployment anyway (not on PyPI). If anyone retries: serve with
-`Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy:
-require-corp`; `micropip.install("./x.whl")` resolves against Pyodide's virtual
-CWD not the page origin (use an absolute URL); and Pyodide runs in a **web
-worker**, so its errors never reach `page.on('console')` — attach via
-`page.on('workercreated')`.
+`Cross-Origin-Opener-Policy: same-origin` +
+`Cross-Origin-Embedder-Policy: require-corp`; `micropip.install("./x.whl")`
+resolves against Pyodide's virtual CWD not the page origin (use an absolute
+URL); and Pyodide runs in a **web worker**, so its errors never reach
+`page.on('console')` — attach via `page.on('workercreated')`.
 
 ## Correction to IDEAS.md
 
@@ -116,11 +135,11 @@ check the monorepo out alongside:
 
 ```yaml
 - uses: actions/checkout@v4
-  with: {path: jbrowse-anywidget}
+  with: { path: jbrowse-anywidget }
 - uses: actions/checkout@v4
-  with: {repository: GMOD/jbrowse-components, path: jbrowse-components}
+  with: { repository: GMOD/jbrowse-components, path: jbrowse-components }
 - run: pnpm install --frozen-lockfile=false
-  working-directory: jbrowse-components   # linked pkgs resolve react/mobx here
+  working-directory: jbrowse-components # linked pkgs resolve react/mobx here
 - run: pnpm install --frozen-lockfile=false
   working-directory: jbrowse-anywidget
 - run: pnpm build

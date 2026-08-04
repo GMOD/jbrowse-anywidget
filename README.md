@@ -187,13 +187,13 @@ view.add_track({
 view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
 ```
 
-That is the whole design. Python adds only what JSON cannot express itself —
-a DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
-network fetch (`fetch_hub`, `plugin`). Everything else is `add_track(<config
-dict>)`, or whole `tracks=[...]` / `default_session={...}` configs on the
-constructor. Nothing here has to grow when JBrowse gains a track type, an
-adapter, or a display. Tracks are opened in the view automatically; removing one
-from `view.tracks` closes it.
+That is the whole design. Python adds only what JSON cannot express itself — a
+DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
+network fetch (`fetch_hub`, `plugin`). Everything else is
+`add_track(<config dict>)`, or whole `tracks=[...]` / `default_session={...}`
+configs on the constructor. Nothing here has to grow when JBrowse gains a track
+type, an adapter, or a display. Tracks are opened in the view automatically;
+removing one from `view.tracks` closes it.
 
 For a custom genome, `assembly=` also accepts a bare sequence-file URL
 (`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly
