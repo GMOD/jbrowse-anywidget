@@ -5,9 +5,10 @@ import {
   type CreateAppOptions,
   type JBrowseAppController,
   createApp,
+  getSessionSnapshot,
   loadPlugins,
 } from '@jbrowse/react-app2'
-import { autorun } from 'mobx'
+import { autorun, untracked } from 'mobx'
 
 import type { AnyModel, Render } from '@anywidget/types'
 
