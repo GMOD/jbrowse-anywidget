@@ -1,4 +1,4 @@
-"""Tests for the declarative track() shorthand and assemblyNames backfill.
+"""Tests for the forms a `tracks=[...]` entry can take.
 
 Track-type/adapter inference now lives in JBrowse core: the view expands a loose
 `{uri, index?, ...}` spec at display time via the same format plugins the
@@ -9,41 +9,7 @@ core owns those tests.
 
 import pytest
 
-from jbrowse_anywidget import LinearGenomeView, track
-
-
-def test_track_is_a_loose_uri_spec():
-    assert track("https://x.org/reads.bam") == {"uri": "https://x.org/reads.bam"}
-
-
-def test_track_carries_name_track_id_and_index():
-    assert track(
-        "https://x.org/r.bam",
-        name="Reads",
-        track_id="reads",
-        index="https://x.org/other.bai",
-    ) == {
-        "uri": "https://x.org/r.bam",
-        "name": "Reads",
-        "trackId": "reads",
-        "index": "https://x.org/other.bai",
-    }
-
-
-def test_track_extra_config_rides_along():
-    assert track(
-        "https://x.org/peaks.bed.gz", category=["Genes"], type="FeatureTrack"
-    ) == {
-        "uri": "https://x.org/peaks.bed.gz",
-        "category": ["Genes"],
-        "type": "FeatureTrack",
-    }
-
-
-def test_track_assembly_name_sets_assembly_names():
-    assert track("https://x.org/r.bam", assembly_name="hg38")["assemblyNames"] == [
-        "hg38"
-    ]
+from jbrowse_anywidget import LinearGenomeView
 
 
 def test_bare_uri_track_entry_becomes_loose_spec():
@@ -75,7 +41,8 @@ def test_track_config_dict_entry_passed_through_untouched():
 
 def test_explicit_assembly_name_is_preserved():
     view = LinearGenomeView(
-        assembly="hg38", tracks=[track("https://x.org/r.bam", assembly_name="other")]
+        assembly="hg38",
+        tracks=[{"uri": "https://x.org/r.bam", "assemblyNames": ["other"]}],
     )
     assert view.tracks[0]["assemblyNames"] == ["other"]
 

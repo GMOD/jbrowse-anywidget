@@ -160,23 +160,21 @@ else a bundled plugin knows. The index defaults to the conventional sibling
 from the view's assembly, so a `tracks=[...]` list needs no per-track
 boilerplate.
 
-`track(uri, name=..., ...)` is the same thing made explicit — reach for it to
-set a display name or extra config. It returns a loose spec (`{"uri": ...}` plus
-whatever you pass) that the view expands, so anything past the defaults (colors,
-display settings, even a `type=` override) is just a keyword you add — the same
-JBrowse config JSON, not a Python wrapper around it:
+To set a display name, or anything else, hand over a dict instead of the bare
+string. It is merged onto the inferred config, so the adapter, the index
+location and `assemblyNames` still come for free, and anything past the defaults
+— colors, display settings, even a `type` override — is just another key:
 
 ```python
-from jbrowse_anywidget import track
-
-view.add_track(track("https://.../reads.cram", name="Tumor"))
+view.add_track({"uri": "https://.../reads.cram", "name": "Tumor"})
 ```
 
-Under the shorthand it's all JBrowse's own config. Assemblies, tracks, and
-sessions are the same
+There is no Python wrapper for this because there is nothing to wrap: it's
+JBrowse's own config. Assemblies, tracks, and sessions are the same
 [JSON-like dicts](https://jbrowse.org/jb2/docs/config_guide/) JBrowse uses
-everywhere, handed straight to the view, so any track type or adapter `track()`
-doesn't cover you write as a dict — the exact JSON from a config file:
+everywhere, handed straight to the view — so a track type or adapter the
+shorthand doesn't infer is written out in full, exactly as it would appear in a
+config file:
 
 ```python
 view.add_track({
@@ -189,11 +187,13 @@ view.add_track({
 view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
 ```
 
-Python adds only what config JSON can't express itself: `track` (URI → loose
-spec the view expands) and `add_features` (DataFrame/list of dicts → track).
-Everything else is `add_track(<config dict>)` — or pass whole `tracks=[...]` /
-`default_session={...}` configs to the constructor. Tracks are opened in the
-view automatically; removing one from `view.tracks` closes it.
+That is the whole design. Python adds only what JSON cannot express itself —
+a DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
+network fetch (`fetch_hub`, `plugin`). Everything else is `add_track(<config
+dict>)`, or whole `tracks=[...]` / `default_session={...}` configs on the
+constructor. Nothing here has to grow when JBrowse gains a track type, an
+adapter, or a display. Tracks are opened in the view automatically; removing one
+from `view.tracks` closes it.
 
 For a custom genome, `assembly=` also accepts a bare sequence-file URL
 (`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly
@@ -259,21 +259,48 @@ drives the full app from a declarative `views=[...]` list — each entry a
 `{"type", "init"}` dict (the same shape as JBrowse Web's
 [`?session=spec-…` URLs](https://jbrowse.org/jb2/docs/urlparams/); the `init`
 fields come from the view's
-[state-model docs](https://jbrowse.org/jb2/docs/models/linearsyntenyview/)),
-built with `linear_view`, `synteny_view`, and `dotplot_view`:
+[state-model docs](https://jbrowse.org/jb2/docs/models/linearsyntenyview/)):
 
 ```python
-from jbrowse_anywidget import JBrowseApp, synteny_view, synteny_track
+from jbrowse_anywidget import JBrowseApp
 
 JBrowseApp(
     assemblies=[
         {"name": "hg38", "uri": hg38_fa},
         {"name": "mm39", "uri": mm39_fa},
     ],
-    tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
-    views=[synteny_view(["hg38", "mm39"], tracks=["hg38-mm39-paf"])],
+    tracks=[
+        {
+            "type": "SyntenyTrack",
+            "trackId": "hg38_mm39",
+            "name": "hg38 vs mm39",
+            "assemblyNames": ["hg38", "mm39"],
+            "adapter": {
+                "type": "PAFAdapter",
+                "targetAssembly": "hg38",
+                "queryAssembly": "mm39",
+                "uri": "hg38_mm39.paf",
+            },
+        }
+    ],
+    views=[
+        {
+            "type": "LinearSyntenyView",
+            "init": {
+                # a comparative view's panels are {"assembly", "loc"?} per side
+                "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+                "tracks": ["hg38_mm39"],
+            },
+        }
+    ],
 )
 ```
+
+Longer than a builder call would be, and deliberately so: this is the JBrowse
+vocabulary, so it transfers unchanged to a `config.json`, to the state-model
+docs, and to a `?session=spec-…` URL — and a view type JBrowse gains, or one a
+runtime plugin registers, opens with nothing added to this package. Change
+`"type"` to `"DotplotView"` for the same alignment as a dotplot.
 
 It loads a separate, larger bundle (the full app), so the single-view
 `LinearGenomeView` stays lean.

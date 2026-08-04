@@ -21,8 +21,6 @@ import pandas as pd
 from jbrowse_anywidget import (
     JBrowseApp,
     LinearGenomeView,
-    dotplot_view,
-    synteny_view,
 )
 
 # the flat assembly shorthand: core picks the adapter from the extension,
@@ -322,12 +320,16 @@ def synteny():
     return app_spec(
         ecoli_app(
             [
-                synteny_view(
-                    STRAINS,
-                    tracks=[["ecoli_ava"]] * 3,
-                    drawCurves=False,
-                    minAlignmentLength=10000,
-                )
+                {
+                    "type": "LinearSyntenyView",
+                    "init": {
+                        # one panel per strain, one band per adjacent pair
+                        "views": [{"assembly": s} for s in STRAINS],
+                        "tracks": [["ecoli_ava"]] * 3,
+                        "drawCurves": False,
+                        "minAlignmentLength": 10000,
+                    },
+                }
             ]
         ),
         "11 · synteny: four E. coli strains (JBrowseApp)",
@@ -336,7 +338,17 @@ def synteny():
 
 def dotplot():
     return app_spec(
-        ecoli_app([dotplot_view(STRAINS[:2], tracks=["ecoli_ava"])]),
+        ecoli_app(
+            [
+                {
+                    "type": "DotplotView",
+                    "init": {
+                        "views": [{"assembly": s} for s in STRAINS[:2]],
+                        "tracks": ["ecoli_ava"],
+                    },
+                }
+            ]
+        ),
         "the same alignment as a dotplot",
     )
 

@@ -87,7 +87,7 @@ save(
             "up. `location` sets the opening region."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import LinearGenomeView, track\n\n"
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
             "hg38 = {\n"
             '    "name": "hg38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
@@ -103,18 +103,18 @@ save(
             "## Add a track\n\n"
             "A bare data-file URL is a track — its type and adapter are inferred "
             "from the extension, the way [@jbrowse/img](https://jbrowse.org/jb2/docs/jbrowse-img)'s "
-            "`--bam`/`--bigwig`/`--cram` flags work for the CLI. `track(uri, name=...)` "
-            "is the same expansion with a display name and room for extra config; "
-            "`assemblyNames` is filled in from the view's assembly. Here, a "
-            "conservation bigwig. Any non-default setting (color, height, ...) is "
-            "a key you add to the returned config dict."
+            "`--bam`/`--bigwig`/`--cram` flags work for the CLI. To set a display "
+            "name or anything else, hand over a dict instead of the bare string — "
+            "it is merged onto the inferred config, so `assemblyNames`, the "
+            "adapter and the index location still come for free. Any non-default "
+            "setting (color, height, ...) is just another key."
         ),
         new_code_cell(
             "view.add_track(\n"
-            "    track(\n"
-            '        "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
-            '        name="phyloP100way",\n'
-            "    )\n"
+            "    {\n"
+            '        "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            '        "name": "phyloP100way",\n'
+            "    }\n"
             ")"
         ),
         new_markdown_cell(
@@ -848,7 +848,7 @@ save(
             "hides short noisy blocks."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import JBrowseApp, synteny_view\n\n"
+            "from jbrowse_anywidget import JBrowseApp\n\n"
             'BASE = "https://jbrowse.org/demos/ecoli_pangenome"\n'
             'STRAINS = ["K12", "Sakai", "CFT073", "NCTC86"]\n\n'
             'assemblies = [{"name": s, "uri": f"{BASE}/{s}.fa.gz"} for s in STRAINS]\n\n'
@@ -867,19 +867,24 @@ save(
             "    assemblies=assemblies,\n"
             "    tracks=[ecoli_ava],\n"
             "    views=[\n"
-            "        synteny_view(\n"
-            "            STRAINS,\n"
-            '            tracks=[["ecoli_ava"]] * 3,  # one band per adjacent pair\n'
-            "            drawCurves=False,\n"
-            "            minAlignmentLength=10000,\n"
-            "        )\n"
+            "        {\n"
+            '            "type": "LinearSyntenyView",\n'
+            '            "init": {\n'
+            '                "views": [{"assembly": s} for s in STRAINS],\n'
+            '                "tracks": [["ecoli_ava"]] * 3,  # one band per adjacent pair\n'
+            '                "drawCurves": False,\n'
+            '                "minAlignmentLength": 10000,\n'
+            "            },\n"
+            "        }\n"
             "    ],\n"
             ")"
         ),
         new_markdown_cell(
-            "The same PAF also opens as a **dotplot** — swap `synteny_view` for "
-            '`dotplot_view(["K12", "Sakai"], tracks=["ecoli_ava"])` to see '
-            "any one pair whole-genome. To build the PAF from your own genomes "
+            "The same PAF also opens as a **dotplot** — change the view's `type` "
+            'to `"DotplotView"` and give it two panels to see any one pair '
+            "whole-genome. A view spec is only ever `{type, init}`, the same "
+            "vocabulary JBrowse Web puts in its `?session=spec-…` URLs, so any "
+            "view type works without anything being added to this package. To build the PAF from your own genomes "
             "(`minimap2 -c -x asm20 --eqx`) and load per-strain gene tracks "
             "alongside, follow the "
             "[tutorial](https://jbrowse.org/jb2/docs/tutorials/allvsall_synteny/)."

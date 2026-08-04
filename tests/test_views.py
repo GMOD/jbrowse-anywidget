@@ -1,109 +1,67 @@
-"""Tests for the declarative multi-view helpers used with JBrowseApp."""
+"""JBrowseApp opens views declared as plain JBrowse JSON.
 
-from jbrowse_anywidget import (
-    JBrowseApp,
-    dotplot_view,
-    linear_view,
-    synteny_track,
-    synteny_view,
-    view,
-)
+A view spec is `{"type", "init"}` — the same vocabulary JBrowse Web serializes
+into its `?session=spec-…` URLs, and the same shape a config.json's
+`defaultSession.views` holds. There are no Python builders for it: writing the
+dict is barely longer than a call would be, and what you write transfers
+straight to a config file or the docs.
+"""
 
+from jbrowse_anywidget import JBrowseApp
 
-def test_view_assembles_a_generic_type_init_spec():
-    assert view("CircularView", assembly="hg19", tracks=["pairs"]) == {
-        "type": "CircularView",
-        "init": {"assembly": "hg19", "tracks": ["pairs"]},
-    }
+PAF = {
+    "type": "SyntenyTrack",
+    "trackId": "hg38_mm39",
+    "name": "hg38 vs mm39",
+    "assemblyNames": ["hg38", "mm39"],
+    "adapter": {
+        "type": "PAFAdapter",
+        "targetAssembly": "hg38",
+        "queryAssembly": "mm39",
+        "uri": "hg38_mm39.paf",
+    },
+}
 
-
-def test_view_drops_unset_init_fields():
-    assert view("LinearGenomeView", assembly="hg38", loc=None)["init"] == {
-        "assembly": "hg38"
-    }
-
-
-def test_linear_view_carries_loc_tracks_and_extra_init():
-    assert linear_view(
-        "hg38", loc="chr1:1..100", tracks=["genes"], colorByCDS=True
-    ) == {
-        "type": "LinearGenomeView",
-        "init": {
-            "assembly": "hg38",
-            "loc": "chr1:1..100",
-            "tracks": ["genes"],
-            "colorByCDS": True,
-        },
-    }
-
-
-def test_synteny_view_expands_assembly_names_into_panels():
-    assert synteny_view(["hg38", "mm39"], tracks=["paf"], cigar_mode="full") == {
-        "type": "LinearSyntenyView",
-        "init": {
-            "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
-            "tracks": ["paf"],
-            "cigarMode": "full",
-        },
-    }
-
-
-def test_synteny_view_accepts_panel_dicts_with_loc():
-    spec = synteny_view(
-        [{"assembly": "hg38", "loc": "chr1"}, {"assembly": "mm39", "loc": "chr1"}]
-    )
-    assert spec["init"]["views"] == [
-        {"assembly": "hg38", "loc": "chr1"},
-        {"assembly": "mm39", "loc": "chr1"},
-    ]
-
-
-def test_dotplot_view_builds_a_dotplot_spec():
-    assert dotplot_view(["a", "b"], tracks=["paf"])["type"] == "DotplotView"
-
-
-def test_synteny_track_builds_a_paf_config():
-    track = synteny_track("data/hg38_mm39.paf", "hg38", "mm39", name="hg38 vs mm39")
-    assert track == {
-        "type": "SyntenyTrack",
-        "trackId": "hg38-vs-mm39",
-        "name": "hg38 vs mm39",
-        "assemblyNames": ["hg38", "mm39"],
-        "adapter": {
-            "type": "PAFAdapter",
-            "targetAssembly": "hg38",
-            "queryAssembly": "mm39",
-            "uri": "data/hg38_mm39.paf",
-        },
-    }
+SYNTENY_VIEW = {
+    "type": "LinearSyntenyView",
+    "init": {
+        # a comparative view's panels are {"assembly", "loc"?} per side
+        "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+        "tracks": ["hg38_mm39"],
+    },
+}
 
 
 def test_jbrowse_app_stores_declarative_config():
     app = JBrowseApp(
         assemblies=[{"name": "hg38"}, {"name": "mm39"}],
-        tracks=[synteny_track("x.paf", "hg38", "mm39")],
-        views=[synteny_view(["hg38", "mm39"], tracks=["x-paf"])],
+        tracks=[PAF],
+        views=[SYNTENY_VIEW],
     )
     assert [a["name"] for a in app.assemblies] == ["hg38", "mm39"]
+    assert app.tracks == [PAF]
     assert app.views[0]["type"] == "LinearSyntenyView"
+
+
+def test_any_view_type_opens_with_no_python_change():
+    # the reason there is no builder: a view type JBrowse gains, or one a
+    # runtime plugin registers, needs nothing added here
+    app = JBrowseApp(
+        assemblies=[{"name": "hg38"}],
+        views=[{"type": "CircularView", "init": {"assembly": "hg38"}}],
+    )
+    assert app.views[0]["type"] == "CircularView"
 
 
 def test_jbrowse_app_carries_a_session_snapshot():
     snapshot = {"name": "saved", "views": [{"type": "LinearGenomeView"}]}
-    app = JBrowseApp(
-        assemblies=[{"name": "hg38"}],
-        views=[linear_view("hg38")],
-        session=snapshot,
-    )
+    app = JBrowseApp(assemblies=[{"name": "hg38"}], views=[], session=snapshot)
     assert app.session == snapshot
-    # views still describes the app's own starting state, so File > New session
-    # returns there rather than to the restored snapshot
-    assert app.views[0]["type"] == "LinearGenomeView"
 
 
 def test_jbrowse_app_opens_its_views_when_no_session_is_given():
-    app = JBrowseApp(assemblies=[{"name": "hg38"}], views=[linear_view("hg38")])
+    app = JBrowseApp(assemblies=[{"name": "hg38"}], views=[])
     assert app.session == {}
-    # the read-back is a separate trait, so the live state can never overwrite
-    # the session that was handed in
+    # the read-back is a separate trait, so live state never overwrites the
+    # session that was handed in
     assert app.current_session == {}

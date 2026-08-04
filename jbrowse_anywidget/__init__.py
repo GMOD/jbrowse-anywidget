@@ -9,9 +9,15 @@ handed straight to the view. `assembly=` also accepts a hub name (``"hg38"``,
 ``"GCF_..."``) the view fetches and resolves, or a bare sequence-file URL
 (``".../hg38.fa.gz"``, ``.2bit``) it builds an assembly from. A custom genome
 needing aliases is the flat shorthand dict — ``{"name": ..., "uri": ...,
-"refNameAliases": {"uri": ...}}`` — which core expands itself. Python adds only
-what JSON can't express: turning an in-memory DataFrame into a track
-(`add_features`).
+"refNameAliases": {"uri": ...}}`` — which core expands itself.
+
+Python adds only what JSON cannot express itself: an in-memory DataFrame as a
+track (`add_features`), bytes from this kernel as a real file the browser reads
+by byte range (`add_local_file`), and a network fetch (`fetch_hub`, `plugin`).
+There are deliberately no builders for track, view or assembly configs — those
+are plain dicts, so what you write here is what a `config.json` holds, and
+nothing in this package has to grow when JBrowse gains a track type, an adapter,
+a display, or a view.
 
 For the common case a bare data-file URI in `tracks=[...]` is enough — its
 track type and adapter are inferred from the extension (the declarative
@@ -28,8 +34,9 @@ view is one flat, config-free call::
         ],
     )
 
-`track(uri)` is the same expansion made explicit, for when you want to set a
-name or extra config; a `(uri, index)` pair names a non-sibling index inline.
+To set a name or any other config, hand over a dict instead of the bare string
+— it is merged onto the inferred config, so the adapter and index location still
+come for free. A `(uri, index)` pair names a non-sibling index inline.
 """
 
 from __future__ import annotations
@@ -56,13 +63,7 @@ _STATIC = Path(__file__).parent / "static"
 __all__ = [
     "LinearGenomeView",
     "JBrowseApp",
-    "track",
     "features_track",
-    "view",
-    "linear_view",
-    "synteny_view",
-    "dotplot_view",
-    "synteny_track",
     "fetch_hub",
     "plugin",
     "PLUGIN_STORE",
@@ -382,106 +383,6 @@ def plugin(spec: str | JsonDict) -> JsonDict:
     return {"name": entry["name"], "url": entry["url"]}
 
 
-def view(type: str, **init: Any) -> JsonDict:
-    """Describe any view for `JBrowseApp(views=[...])`.
-
-    The general form behind `linear_view`, `synteny_view`, and `dotplot_view`:
-    builds the `{"type", "init"}` dict any view type understands, where `init`
-    is the declarative [session-spec
-    init](https://jbrowse.org/jb2/docs/urlparams/#session-spec) for that type,
-    with `None` values dropped.
-
-    This is also how a plugin's view type is opened — its init fields are the
-    plugin's own, so there is no Python wrapper to fall out of step with them::
-
-        view("CircularView", assembly="hg19", tracks=["pairs"])
-        view("ProteinView", url=".../AF-P04637-F1-model_v6.cif", height=600)
-    """
-    return {"type": type, "init": _drop_none(init)}
-
-
-def linear_view(
-    assembly: str,
-    loc: str | None = None,
-    tracks: list[str] | None = None,
-    **init: Any,
-) -> JsonDict:
-    """Describe a `LinearGenomeView` for `JBrowseApp(views=[...])`.
-
-    `tracks` are trackIds (referencing `JBrowseApp`'s `tracks`); extra keyword
-    args ride onto the view's init blob (e.g. `colorByCDS=True`).
-    """
-    return view("LinearGenomeView", assembly=assembly, loc=loc, tracks=tracks, **init)
-
-
-def _panels(assemblies: list[str] | list[JsonDict]) -> list[JsonDict]:
-    # each comparative-view panel is {"assembly", "loc"?}; accept bare assembly
-    # names or full panel dicts
-    return [a if isinstance(a, dict) else {"assembly": a} for a in assemblies]
-
-
-def synteny_view(
-    assemblies: list[str] | list[JsonDict],
-    tracks: list[str] | None = None,
-    cigar_mode: str | None = None,
-    **init: Any,
-) -> JsonDict:
-    """Describe a `LinearSyntenyView` comparing two (or more) assemblies.
-
-    `assemblies` is a list of assembly names (or `{"assembly", "loc"}` panel
-    dicts, to focus each panel on a region); `tracks` are the synteny trackIds
-    tying them together. `cigar_mode` is `"full"`/`"matches"`/`"off"`.
-    """
-    return view(
-        "LinearSyntenyView",
-        views=_panels(assemblies),
-        tracks=tracks,
-        cigarMode=cigar_mode,
-        **init,
-    )
-
-
-def dotplot_view(
-    assemblies: list[str] | list[JsonDict],
-    tracks: list[str] | None = None,
-    **init: Any,
-) -> JsonDict:
-    """Describe a `DotplotView` comparing two assemblies via a synteny track."""
-    return view("DotplotView", views=_panels(assemblies), tracks=tracks, **init)
-
-
-def synteny_track(
-    uri: str,
-    target_assembly: str,
-    query_assembly: str,
-    name: str | None = None,
-    track_id: str | None = None,
-    **extra: Any,
-) -> JsonDict:
-    """Build a synteny (PAF) track config spanning two assemblies.
-
-    `target_assembly`/`query_assembly` name the two sides (PAF target = the
-    first assembly of a `synteny_view`). For anything beyond a plain `.paf` —
-    a bgzipped+indexed PAF, or a `.chain`/`.delta`/`.anchors` file — pass a full
-    track config dict instead.
-    """
-    display_name = name if name is not None else _clean_uri(uri).rsplit("/", 1)[-1]
-    conf: JsonDict = {
-        "type": "SyntenyTrack",
-        "trackId": track_id if track_id is not None else _slug(display_name),
-        "name": display_name,
-        "assemblyNames": [target_assembly, query_assembly],
-        "adapter": {
-            "type": "PAFAdapter",
-            "targetAssembly": target_assembly,
-            "queryAssembly": query_assembly,
-            "uri": uri,
-        },
-        **extra,
-    }
-    return conf
-
-
 def _normalize_track(item: TrackEntry) -> JsonDict:
     """Expand a `tracks=[...]` entry to a loose spec the view can consume.
 
@@ -498,49 +399,6 @@ def _normalize_track(item: TrackEntry) -> JsonDict:
         uri, index = item
         return {"uri": uri, "index": index}
     return item
-
-
-def track(
-    uri: str,
-    name: str | None = None,
-    track_id: str | None = None,
-    assembly_name: str | None = None,
-    index: str | None = None,
-    **extra: Any,
-) -> JsonDict:
-    """Describe a track by its data-file URI (the declarative shorthand).
-
-    Returns a loose spec — `{"uri": uri}` plus whatever you pass — that the view
-    expands into a full track config when it loads, inferring the track type and
-    adapter from the file extension with JBrowse's own format plugins (the same
-    inference the "Add track" flow uses). No extension table lives here, so every
-    format a bundled plugin recognizes works: .bam/.cram, .bw/.bigwig,
-    .bb/.bigbed, .vcf(.gz), .gff(.gz)/.gff3(.gz), .gtf(.gz), .bed(.gz), .hic, and
-    more; a bgzipped file resolves to its indexed adapter, a plain one to the
-    whole-file adapter.
-
-    Extra keyword args ride onto the resulting config and override the inferred
-    defaults, so a display name, color, category — even a `type` override — is
-    just a keyword; it's the same JBrowse config JSON, not a Python wrapper::
-
-        track("https://.../reads.cram", name="Tumor")
-        track("https://.../peaks.bed.gz", category=["Genes"])
-
-    `index=` names a non-sibling index (a `.csi` index is detected by extension);
-    otherwise the adapter derives its `.bai`/`.crai`/`.tbi` sibling from the uri.
-    `assembly_name=` sets assemblyNames; left off, the view backfills it from its
-    own assembly.
-    """
-    return _drop_none(
-        {
-            "uri": uri,
-            "name": name,
-            "trackId": track_id,
-            "index": index,
-            "assemblyNames": [assembly_name] if assembly_name else None,
-            **extra,
-        }
-    )
 
 
 def features_track(
