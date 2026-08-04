@@ -26,6 +26,17 @@ The payoff is that a view type, adapter or display JBrowse adds needs
 
 ## Traps
 
+**CI builds against upstream `main`; you build against your checkout.** The
+`link:` deps point at a sibling `jbrowse-components` working tree, and `tsc`
+follows them into its _source_ — so `pnpm build` and `pnpm typecheck` passing
+here says nothing about CI, which clones `GMOD/jbrowse-components` main instead.
+Anything you just added to the monorepo has to be pushed before this repo's jobs
+can go green, and the failure names the missing export rather than the cause.
+This is not hypothetical: `localFiles`, `addLocalFiles`, `getSessionSnapshot`,
+`setSession` and `CreateAppOptions.session` sat unpushed behind ~370 monorepo
+commits while `bundle` and `typecheck` were red for them. Check
+`git log origin/main..HEAD` in the monorepo before concluding a job is broken.
+
 **`resolve.dedupe` makes this repo's version win.** `mobx` is deduped against
 the linked monorepo checkout, so the version in `package.json` is not a local
 preference — it must track the monorepo's. A monorepo bump breaks `pnpm build`
@@ -67,30 +78,6 @@ PNGs even with no code change. Don't commit regenerated figures in a change that
 isn't about them; `git checkout images/` after a verification run.
 
 ## Known broken / unresolved
-
-- **`bundle` and `typecheck` cannot go green yet — they build against upstream
-  `GMOD/jbrowse-components` main, and this repo uses embedded APIs that have not
-  been pushed there.** The local monorepo checkout these repos are developed
-  against is ~360 commits ahead of upstream main, and every one of these lives
-  only in it:
-
-  | missing upstream                                | used by        |
-  | ----------------------------------------------- | -------------- |
-  | `getSessionSnapshot` from `@jbrowse/react-app2` | `src/app.ts`   |
-  | `session` on `CreateAppOptions`                 | `src/app.ts`   |
-  | `setSession` on `JBrowseAppController`          | `src/app.ts`   |
-  | `localFiles` on `CreateLinearGenomeViewOptions` | `src/index.ts` |
-  | `addLocalFiles` on `LinearGenomeViewController` | `src/index.ts` |
-
-  So the red X is a true signal, not a broken workflow: it is measuring the gap
-  between what this repo needs and what a user installing from upstream would
-  get. It clears when the monorepo commits land — nothing in _this_ repo can fix
-  it, and weakening the job to make it green would throw away the only check
-  that notices. `typecheck` additionally reports four `Cannot find name 'jest'`
-  errors from upstream's own source (`environment.ts`, `ViewHeader.tsx`,
-  `useAssemblySelection.ts`, `useRecentLocations.ts`): the local monorepo
-  already deleted those `typeof jest` guards, so they clear on the same push.
-  Don't "fix" them here by loosening `types: []` in `tsconfig.json`.
 
 - **No browser render job in CI.** `test.yml` builds and typechecks the bundle;
   nothing renders it. The harness exists (`scripts/screenshot_examples.mjs`) and
