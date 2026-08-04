@@ -26,6 +26,10 @@ jobs:
   render:
     name: the bundles actually draw
     runs-on: ubuntu-latest
+    # a nightly with no timeout inherits GitHub's 6-hour default, so anything
+    # that hangs burns a runner all night, every night. Well clear of the ~10
+    # minutes this takes when it is behaving.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
