@@ -86,24 +86,15 @@ isn't about them; `git checkout images/` after a verification run.
   `PUPPETEER_FROM=<workspace>/jbrowse-components/package.json`, and real network
   to jbrowse.org and UCSC — so it is the flaky one. Nightly-only would suit it.
 
-## Work that exists but did not land
+## marimo
 
-Tagged locally as **`wip/embedded-session-work`** (`bde1fd6`), cut before main
-diverged, so it does _not_ apply cleanly — it predates the TypeScript entrypoint
-migration and the generic `view()`. Treat it as a reference, not a patch:
-
-- `examples/12_large_data.ipynb` — 2.1M NCBI RefSeq exons, measuring ~207MB
-  inlined against 3.9MB as tabix. Executes clean.
-- `examples/13_large_wiggle.ipynb` — the three routes for signal, measured on
-  one chr1 track: inlined ~233MB, bigWig 21MB, recompute-per-region ~9–148KB
-  _per view_ with no ceiling.
-- `examples/marimo/large_wiggle.py` — the reactive case, where reading
-  `view.location` in a cell _is_ the subscription, so the observe/callback
-  wiring disappears. `marimo export html <file>` runs every cell headless, which
-  is a better widget check than nbconvert. Verified working.
-
-Both notebooks depend on `add_local_file`, which is on main, so they port with
-only import/API updates.
+`examples/marimo/large_wiggle.py` is the reactive twin of notebook 13: reading
+`view.location` in a cell _is_ the subscription, so the `observe`/callback
+wiring and the explicit clear of the previous track all disappear. It is
+hand-written `.py`, not generated, and is linted and formatted like the rest of
+the package — `examples/*.ipynb` is what ruff skips, not `examples/`.
+`marimo export html <file>` runs every cell headless, which is a better widget
+check than nbconvert.
 
 **marimo WASM (`export html-wasm`) was tried and abandoned.** Wheel builds,
 micropip installs it, marimo boots — widget never renders, no error surfaced.

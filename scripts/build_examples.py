@@ -892,4 +892,331 @@ save(
     ],
 )
 
+save(
+    "12_large_data.ipynb",
+    [
+        new_markdown_cell(
+            "# Large results: write a file, don't inline a table\n\n"
+            + badge("12_large_data.ipynb")
+            + "\n\n`add_features` puts every row into the widget's state as JSON. "
+            "That is the right thing for a few thousand peaks, and the wrong "
+            "thing by a hundred thousand — the whole table has to be serialized, "
+            "pushed through the notebook's comm channel, and held in the "
+            "browser's memory whether or not you ever look at it.\n\n"
+            "The alternative is what genome browsers have always done: write a "
+            "**real indexed file** and read it *by byte range*. `add_local_file` "
+            "pushes one from this kernel into the browser, where JBrowse seeks "
+            "into it through its index exactly as it would a file on a web "
+            "server — but with no server, no CORS, and no public bucket. Only "
+            "the bytes for the region on screen are ever touched.\n\n"
+            "We'll build a real one: every **NCBI RefSeq exon in the human "
+            "genome**, straight from UCSC."
+        ),
+        new_code_cell(install("pysam pyBigWig")),
+        new_markdown_cell(
+            "## The analysis\n\n"
+            "One download of the RefSeq transcript table, exploded into exons. "
+            "This is ordinary pandas — nothing here knows about JBrowse yet."
+        ),
+        new_code_cell(
+            "import numpy as np\n"
+            "import pandas as pd\n\n"
+            'COLS = ("bin name chrom strand txStart txEnd cdsStart cdsEnd exonCount "\n'
+            '        "exonStarts exonEnds score name2 cdsStartStat cdsEndStat exonFrames").split()\n'
+            "tx = pd.read_csv(\n"
+            '    "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz",\n'
+            '    sep="\\t",\n'
+            "    names=COLS,\n"
+            ")\n"
+            'tx = tx[tx.chrom.str.match(r"^chr(\\d+|X|Y)$")]\n\n'
+            "# one row per exon\n"
+            "exons = pd.DataFrame(\n"
+            "    {\n"
+            '        "chrom": tx.chrom.str.removeprefix("chr").repeat(tx.exonCount).values,\n'
+            '        "start": np.concatenate(\n'
+            '            [np.fromstring(s.rstrip(","), sep=",", dtype=np.int64) for s in tx.exonStarts]\n'
+            "        ),\n"
+            '        "end": np.concatenate(\n'
+            '            [np.fromstring(e.rstrip(","), sep=",", dtype=np.int64) for e in tx.exonEnds]\n'
+            "        ),\n"
+            '        "name": tx.name2.repeat(tx.exonCount).values,\n'
+            "    }\n"
+            ').sort_values(["chrom", "start"], kind="stable")\n\n'
+            'print(f"{len(exons):,} exons")'
+        ),
+        new_markdown_cell(
+            "## What inlining would cost\n\n"
+            "`features_track` builds the config `add_features` would send, so we "
+            "can price a row before committing to two million of them."
+        ),
+        new_code_cell(
+            "import json\n\n"
+            "from jbrowse_anywidget import features_track\n\n"
+            'sample = features_track(exons.head(20_000).to_dict("records"), name="sample")\n'
+            "per_row = len(json.dumps(sample)) / 20_000\n"
+            'print(f"inlined: ~{per_row * len(exons) / 1e6:,.0f} MB of JSON")'
+        ),
+        new_markdown_cell(
+            "Around **200 MB** — through a websocket, into browser memory, to "
+            "draw a few hundred exons at a time. Now the same data as a file."
+        ),
+        new_markdown_cell(
+            "## As a tabix file\n\n"
+            "BED, bgzipped and indexed — the same pair of files you'd host on a "
+            "server. `pysam` writes both.\n\n"
+            "`add_local_file` registers the bytes under the file's name and "
+            "picks up the `.tbi` sibling automatically. After that the name "
+            "**is** the URL: `add_track` infers `BedTabixAdapter` from the "
+            "`.bed.gz` extension and finds the index by name, exactly as it "
+            "would for a remote file."
+        ),
+        new_code_cell(
+            "import os\n\n"
+            "import pysam\n\n"
+            'exons.to_csv("exons.bed", sep="\\t", header=False, index=False)\n'
+            'pysam.tabix_compress("exons.bed", "exons.bed.gz", force=True)\n'
+            'pysam.tabix_index("exons.bed.gz", preset="bed", force=True)\n\n'
+            'size = (os.path.getsize("exons.bed.gz") + os.path.getsize("exons.bed.gz.tbi")) / 1e6\n'
+            'print(f"tabix: {size:.1f} MB, and the view reads only the part it shows")'
+        ),
+        new_code_cell(
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            'view = LinearGenomeView(assembly="hg38", location="17:7,668,400..7,687,500")\n'
+            'view.add_track(view.add_local_file("exons.bed.gz"))\n'
+            "view"
+        ),
+        new_markdown_cell(
+            "That's TP53, drawn from a two-million-feature file that never left "
+            "this kernel. Pan or zoom and the view fetches the next slice through "
+            "the tabix index — the cost of moving is the same as it would be for "
+            "a file on a server."
+        ),
+        new_markdown_cell(
+            "## As a bigWig\n\n"
+            "For a quantitative signal, bigWig is the better container: it stores "
+            "**precomputed zoom levels**, so viewing a whole chromosome reads a "
+            "summary rather than every underlying point. Here that's exon density "
+            "per 100 kb — a crude gene-density map of the genome."
+        ),
+        new_code_cell(
+            "import pyBigWig\n\n"
+            "BIN = 100_000\n"
+            'chrom_len = exons.groupby("chrom").end.max()\n'
+            'order = [str(c) for c in range(1, 23)] + ["X", "Y"]\n'
+            "order = [c for c in order if c in chrom_len.index]\n\n"
+            'bw = pyBigWig.open("exon_density.bw", "w")\n'
+            "bw.addHeader([(c, int(chrom_len[c]) + BIN) for c in order])\n"
+            "for c in order:\n"
+            "    binned = (exons.loc[exons.chrom == c, 'start'] // BIN * BIN).value_counts().sort_index()\n"
+            "    bw.addEntries(\n"
+            "        [c] * len(binned),\n"
+            "        binned.index.astype(int).tolist(),\n"
+            "        ends=(binned.index + BIN).astype(int).tolist(),\n"
+            "        values=binned.values.astype(float).tolist(),\n"
+            "    )\n"
+            "bw.close()\n"
+            'size = os.path.getsize("exon_density.bw") / 1e6\n'
+            'print(f"bigWig: {size:.1f} MB, with zoom levels baked in")'
+        ),
+        new_code_cell(
+            'view.add_track(view.add_local_file("exon_density.bw"))\n'
+            'view.location = "17"\n'
+            "view"
+        ),
+        new_markdown_cell(
+            "## Which to use\n\n"
+            "| | `add_features` | `add_local_file` |\n"
+            "|---|---|---|\n"
+            "| data | a DataFrame or list of dicts | a real file you wrote |\n"
+            "| cost | whole table as JSON, always resident | bytes for the visible region |\n"
+            "| good to | a few thousand rows | as large as you like |\n"
+            "| formats | features only | anything JBrowse reads |\n\n"
+            "`add_local_file` is not limited to the two formats above — a "
+            "sorted+indexed BAM or CRAM, a bgzipped VCF, a `.hic`, a bigBed all "
+            "work the same way, because the browser is opening them with the same "
+            "adapters it uses for remote files. Register the index under its "
+            "conventional sibling name (`reads.bam` + `reads.bam.bai`) and the "
+            "adapter finds it.\n\n"
+            "The files here are written to the notebook's working directory; "
+            "nothing keeps them afterwards, and nothing was uploaded anywhere."
+        ),
+    ],
+)
+
+save(
+    "13_large_wiggle.ipynb",
+    [
+        new_markdown_cell(
+            "# Large signal: three ways to get a wiggle onto the genome\n\n"
+            + badge("13_large_wiggle.ipynb")
+            + "\n\nCoverage, conservation, methylation, a ChIP fold-change — "
+            "quantitative signal is the data type that gets big fastest, because "
+            "there's a value for every base or every bin. This notebook lays the "
+            "three routes side by side and measures each, so you can pick by "
+            "size rather than by guess.\n\n"
+            "| | how it travels | good to |\n"
+            "|---|---|---|\n"
+            "| `add_features` | every point inlined as JSON | ~100k points |\n"
+            "| bigWig + `add_local_file` | the file crosses once, then byte ranges | tens of MB |\n"
+            "| recompute per region | only what's on screen, every pan | **unlimited** |\n\n"
+            "Throughout, `signal` stands in for whatever your pipeline produced — "
+            "see [05](05_bam_coverage.ipynb) for real pysam depth and "
+            "[06](06_popgen_selection.ipynb) for a real scan."
+        ),
+        new_code_cell(install("pyBigWig")),
+        new_markdown_cell(
+            "## The signal\n\n"
+            "Binned values along hg38 chr1 — the shape of a coverage track."
+        ),
+        new_code_cell(
+            "import numpy as np\n\n"
+            'CHROM, CHROM_LEN = "1", 248_956_422\n'
+            "BIN = 100\n"
+            "rng = np.random.default_rng(0)\n"
+            "starts = np.arange(0, CHROM_LEN - BIN, BIN, dtype=np.int64)\n"
+            "signal = rng.gamma(2.0, 3.0, starts.size).astype(np.float32)\n"
+            'print(f"{starts.size:,} bins at {BIN}bp across chr1")'
+        ),
+        new_markdown_cell(
+            "## 1. Inline it — `add_features`\n\n"
+            "A **`score`** column is what makes this a wiggle rather than boxes: "
+            "the track comes back as a `QuantitativeTrack` with a value axis and "
+            "autoscaling. (That's JBrowse's own name for the plotted value, so "
+            "call the column `score`, not `depth` or `signal`.)\n\n"
+            "Every point is serialized into the widget's state, so this is priced "
+            "per point — fine for a region, hopeless for a chromosome."
+        ),
+        new_code_cell(
+            "import json\n\n"
+            "from jbrowse_anywidget import features_track\n\n\n"
+            "def rows(start_arr, value_arr):\n"
+            "    return [\n"
+            '        {"refName": CHROM, "start": int(s), "end": int(s) + BIN, "score": round(float(v), 2)}\n'
+            "        for s, v in zip(start_arr, value_arr)\n"
+            "    ]\n\n\n"
+            "per_point = len(json.dumps(features_track(rows(starts[:5000], signal[:5000])))) / 5000\n"
+            'print(f"inlined: ~{per_point * starts.size / 1e6:,.0f} MB for the whole chromosome")'
+        ),
+        new_markdown_cell(
+            "Too much. But for a **window** it's exactly right — one call, no "
+            "file, and it renders as a real wiggle:"
+        ),
+        new_code_cell(
+            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            'view = LinearGenomeView(assembly="hg38", location="1:1,000,000..1,200,000")\n'
+            "window = (starts >= 1_000_000) & (starts < 1_200_000)\n"
+            'view.add_features(rows(starts[window], signal[window]), name="signal (inlined window)")\n'
+            "view"
+        ),
+        new_markdown_cell(
+            "## 2. Write a bigWig — `add_local_file`\n\n"
+            "bigWig is the format built for this. It stores **precomputed zoom "
+            "levels**, so viewing a whole chromosome reads a summary instead of "
+            "every underlying point, and it's indexed, so any region is a seek. "
+            "`add_local_file` pushes it into the browser once and JBrowse reads "
+            "byte ranges out of it — no web server."
+        ),
+        new_code_cell(
+            "import os\n\n"
+            "import pyBigWig\n\n"
+            'bw = pyBigWig.open("signal.bw", "w")\n'
+            "bw.addHeader([(CHROM, CHROM_LEN)])\n"
+            "CHUNK = 2_000_000  # addEntries is happier in batches\n"
+            "for i in range(0, starts.size, CHUNK):\n"
+            "    s = starts[i : i + CHUNK]\n"
+            "    bw.addEntries(\n"
+            "        [CHROM] * s.size,\n"
+            "        s.tolist(),\n"
+            "        ends=(s + BIN).tolist(),\n"
+            "        values=signal[i : i + CHUNK].astype(float).tolist(),\n"
+            "    )\n"
+            "bw.close()\n"
+            'print(f"bigWig: {os.path.getsize("signal.bw") / 1e6:.0f} MB, zoom levels included")'
+        ),
+        new_code_cell(
+            'view.add_track(view.add_local_file("signal.bw"))\n'
+            'view.location = "1"  # whole chromosome: served from a zoom level\n'
+            "view"
+        ),
+        new_markdown_cell(
+            "Zoom in and the view switches to the underlying data automatically. "
+            "The whole file crossed the comm once, though — at 10 bp bins rather "
+            "than 100 this same chromosome is ~200 MB, and a genome is ~3 GB. "
+            "That's where this route stops."
+        ),
+        new_markdown_cell(
+            "## 3. Recompute per region\n\n"
+            "The observation that removes the ceiling: a wiggle is only ever "
+            "drawn at **screen resolution** — a couple of thousand bins across "
+            "the view, however much data is underneath. So bin in the kernel for "
+            "the visible window only, and the payload stops depending on the "
+            "size of the data entirely.\n\n"
+            "The data never moves. It can be an array, a zarr store, a database, "
+            "a file on a cluster the browser can't reach — anything Python can "
+            "slice."
+        ),
+        new_code_cell(
+            "import re\n\n"
+            "SCREEN_BINS = 1500\n\n\n"
+            "def parse_loc(loc):\n"
+            '    m = re.match(r"^\\s*([^:\\s]+)\\s*:\\s*([\\d,]+)\\s*\\.\\.\\s*([\\d,]+)", loc or "")\n'
+            '    return (int(m[2].replace(",", "")), int(m[3].replace(",", ""))) if m else None\n\n\n'
+            "def render_window(start, end):\n"
+            "    # ceiling division, so SCREEN_BINS is a ceiling not a target\n"
+            "    step = max(BIN, -(-(end - start) // SCREEN_BINS))\n"
+            "    edges = np.arange(start, end, step, dtype=np.int64)\n"
+            "    # mean of the underlying bins falling in each screen bin\n"
+            "    idx = np.searchsorted(starts, edges)\n"
+            "    values = [\n"
+            "        float(signal[a:b].mean()) if b > a else 0.0\n"
+            "        for a, b in zip(idx, np.r_[idx[1:], idx[-1]])\n"
+            "    ]\n"
+            "    live.tracks = []  # replace the previous window\n"
+            "    live.add_features(\n"
+            '        [{"refName": CHROM, "start": int(s), "end": int(s) + step, "score": round(v, 2)}\n'
+            "         for s, v in zip(edges, values)],\n"
+            '        name="signal (recomputed for this view)",\n'
+            '        track_id="live",\n'
+            "    )\n\n\n"
+            "def on_location(change):\n"
+            '    region = parse_loc(change["new"])\n'
+            "    if region:\n"
+            "        render_window(*region)\n\n\n"
+            'live = LinearGenomeView(assembly="hg38", location="1:1,000,000..1,200,000")\n'
+            'live.observe(on_location, "location")\n'
+            "render_window(1_000_000, 1_200_000)\n"
+            "live"
+        ),
+        new_markdown_cell(
+            "Pan or zoom and the kernel rebins for the new window. Each update is "
+            "a fixed ~100-200 KB whether the data behind it is a megabyte or a "
+            "terabyte:"
+        ),
+        new_code_cell(
+            "for span in (10_000, 1_000_000, CHROM_LEN):\n"
+            "    step = max(BIN, span // SCREEN_BINS)\n"
+            "    n = min(SCREEN_BINS, span // step)\n"
+            "    payload = len(json.dumps(features_track(\n"
+            '        [{"refName": CHROM, "start": int(i * step), "end": int((i + 1) * step), "score": 1.23}\n'
+            "         for i in range(n)]\n"
+            "    )))\n"
+            '    print(f"{span:>12,} bp window -> {payload / 1e3:5.0f} KB")'
+        ),
+        new_markdown_cell(
+            "## Choosing\n\n"
+            "- **A region you already have in memory** → `add_features` with a "
+            "`score` column. One call, no file.\n"
+            "- **A whole chromosome or genome you want to browse freely** → write "
+            "a bigWig and `add_local_file`. Real zoom levels, real seeking, and "
+            "the track keeps working if you later host the file instead.\n"
+            "- **Bigger than that, or not a file at all** → recompute per region. "
+            "Constant cost, unlimited data, at the price of a round trip on every "
+            "pan.\n\n"
+            "The three compose: a bigWig for the overview and a recomputed track "
+            "for something expensive you only want for the visible window is a "
+            "perfectly good pairing."
+        ),
+    ],
+)
+
 print("done")
