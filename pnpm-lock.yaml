@@ -18,8 +18,8 @@ importers:
         specifier: link:../jbrowse-components/products/jbrowse-react-linear-genome-view
         version: link:../jbrowse-components/products/jbrowse-react-linear-genome-view
       mobx:
-        specifier: ^6.16.1
-        version: 6.16.1
+        specifier: ^7.0.0
+        version: 7.0.0
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -33,6 +33,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.5.1
         version: 4.7.0(vite@6.4.3)
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -946,8 +949,8 @@ packages:
   minimalistic-crypto-utils@1.0.1:
     resolution: {integrity: sha512-JIYlbt6g8i5jKfJ3xz7rF0LXmv2TkDxBLUkiBeZ7bAx4GnnNMr8xFpGnOxn6GhTEHx3SjRrZEoU+j04prX1ktg==}
 
-  mobx@6.16.1:
-    resolution: {integrity: sha512-syNcDdX3KT+Jq3je6eGjBhuc24Z68td2VG0zNFqRswaE433D9SNH5VRy/xrGbJsUixfppLLccXhAW9JSf6n+SQ==}
+  mobx@7.0.0:
+    resolution: {integrity: sha512-J+hR/wq6RdBnB4QXQRqGrWL9vOOLKaYhXh0ooxLAW4AE72av10Y5+xiaxohUYmPZiUswfpxMjQooYqpWkv+Fxg==}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -1031,6 +1034,11 @@ packages:
   postcss@8.5.16:
     resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
     engines: {node: ^10 || ^12 || >=14}
+
+  prettier@3.9.6:
+    resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
+    engines: {node: '>=14'}
+    hasBin: true
 
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
@@ -2085,7 +2093,7 @@ snapshots:
 
   minimalistic-crypto-utils@1.0.1: {}
 
-  mobx@6.16.1: {}
+  mobx@7.0.0: {}
 
   ms@2.1.3: {}
 
@@ -2191,6 +2199,8 @@ snapshots:
       nanoid: 3.3.15
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  prettier@3.9.6: {}
 
   process-nextick-args@2.0.1: {}
 
