@@ -33,8 +33,16 @@ JBrowse's session spec already does.
 toolchain, which means it can silently drift from `src/`. Nothing catches that
 today, and nothing in CI typechecks the TS either.
 
-Both are blocked by the same thing: `package.json` pulls `@jbrowse/react-app2`
-and `@jbrowse/react-linear-genome-view2` via `link:../jbrowse-components`, so
-`pnpm install` can't run anywhere that sibling checkout doesn't exist. Depending
-on a published version, with the monorepo link kept as an opt-in override, would
-unblock a `pnpm typecheck` job and a "rebuild and diff the bundle" job.
+This was thought to be blocked by the `link:../jbrowse-components` dependency —
+`pnpm install` needing a sibling checkout that CI doesn't have. It isn't: CI can
+check the monorepo out alongside with `actions/checkout` and a `path:`, install
+in it first (the linked packages resolve react/mobx from its tree), then install
+and build here. `agent-docs/HANDOFF.md` has the steps.
+
+`pnpm typecheck` also works again as of the `types: []` fix, so a typecheck job
+is free. Run the bundle job on a **nightly cron** rather than only push/PR: the
+break is normally caused by a monorepo commit, so no event in this repo fires.
+
+Depending on a published version instead, with the monorepo link as an opt-in
+override, is still worth doing — it would make the install cheap — but it is no
+longer a prerequisite.
