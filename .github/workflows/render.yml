@@ -1,0 +1,92 @@
+# Render the widget bundles in a real browser, nightly.
+#
+# `bundle` proves the JavaScript builds and `typecheck` proves it type-checks;
+# neither proves it *draws*. This does: it builds the widgets, renders all 9
+# example configs headless, and fails if any of them never paints a canvas.
+#
+# It is also the only thing that exercises the local-file read path end to end.
+# jsdom cannot: its Blob.slice() returns an object with no arrayBuffer(), so
+# generic-filehandle2 can't read from it. The `05_local_file` spec draws a tabix
+# BED and a bigWig from in-memory bytes, and the bigWig is the strong one --
+# it can only render if the blob is genuinely random-access.
+#
+# Nightly rather than on push/PR, deliberately: it needs real network to
+# jbrowse.org and UCSC, and it links against jbrowse-components `main`, so it
+# fails for reasons that have nothing to do with the commit that triggered it.
+# A flaky required check gets ignored, and then it is worth nothing. Run it by
+# hand from the Actions tab when a config change needs proving.
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+name: render
+
+jobs:
+  render:
+    name: the bundles actually draw
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: jbrowse-anywidget
+      # the `link:` deps and puppeteer both resolve from this checkout; the
+      # harness also imports its readiness waits from the monorepo's
+      # browser-test-utils, so a capture uses the same signals as jbrowse-web's
+      # own browser tests rather than a bespoke sleep
+      - uses: actions/checkout@v4
+        with:
+          repository: GMOD/jbrowse-components
+          path: jbrowse-components
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      # node 24 strips TypeScript natively, which the harness needs: it imports
+      # browser-test-utils' waits.ts directly, as source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: jbrowse-components
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: jbrowse-anywidget
+      # render what the source builds today, not the committed bundle: the
+      # break this job exists to find normally comes from the monorepo
+      - run: pnpm build
+        working-directory: jbrowse-anywidget
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      # `scripts` is the extra the spec generator needs on top of dev (bioframe
+      # builds the CpG-shores figure); it is kept out of dev so the pytest jobs
+      # install neither
+      - run: pip install -e ".[dev,scripts]"
+        working-directory: jbrowse-anywidget
+
+      # the specs are the traits real LinearGenomeView/JBrowseApp calls produce,
+      # so they are generated from the package rather than committed (and
+      # .gitignored)
+      - name: generate the specs
+        working-directory: jbrowse-anywidget
+        run: python scripts/gen_screenshot_specs.py
+
+      - name: render every example
+        working-directory: jbrowse-anywidget
+        env:
+          PUPPETEER_FROM:
+            ${{ github.workspace }}/jbrowse-components/package.json
+        run: node scripts/screenshot_examples.mjs
+
+      # The images are the evidence, so they are worth keeping whichever way it
+      # went — on success to eyeball, on failure to see how far it got. They are
+      # NOT committed: re-rendering produces byte-different PNGs even with no
+      # code change, so committing them would be pure churn.
+      - name: upload the images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: jbrowse-anywidget/images/*.png
+          if-no-files-found: error

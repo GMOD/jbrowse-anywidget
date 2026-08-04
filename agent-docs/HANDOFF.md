@@ -67,7 +67,14 @@ no `arrayBuffer()`, so `generic-filehandle2` cannot read from it. The byte-range
 read is covered by `scripts/screenshot_examples.mjs` (`05_local_file`, which
 draws a tabix BED _and_ a bigWig — the bigWig is the strong one, since it can
 only render if the blob is genuinely random-access) and by product-core's
-`localFiles.test.ts`.
+`localFiles.test.ts`. The `render` workflow is what runs that harness in CI —
+nightly, and by `workflow_dispatch` on demand. It is deliberately not on
+push/PR: it needs real network and links against jbrowse-components `main`, so
+it fails for reasons unrelated to the commit that triggered it. It fails the run
+if any example never paints a canvas, and uploads the images as an artifact
+either way. To run it locally: `python scripts/gen_screenshot_specs.py` (specs
+are gitignored), then
+`PUPPETEER_FROM=<workspace>/jbrowse-components/package.json node scripts/screenshot_examples.mjs`.
 
 **`score` is the magic column.** `add_features` builds a `QuantitativeTrack` — a
 real wiggle with a value axis — only when a column is literally named `score`.
@@ -79,12 +86,7 @@ isn't about them; `git checkout images/` after a verification run.
 
 ## Known broken / unresolved
 
-- **No browser render job in CI.** `test.yml` builds and typechecks the bundle;
-  nothing renders it. The harness exists (`scripts/screenshot_examples.mjs`) and
-  is the only thing that exercises the blob read path, but it needs
-  `gen_screenshot_specs.py` run first (specs are gitignored),
-  `PUPPETEER_FROM=<workspace>/jbrowse-components/package.json`, and real network
-  to jbrowse.org and UCSC — so it is the flaky one. Nightly-only would suit it.
+Nothing outstanding.
 
 ## marimo
 
@@ -104,26 +106,3 @@ Blocked for real deployment anyway (not on PyPI). If anyone retries: serve with
 resolves against Pyodide's virtual CWD not the page origin (use an absolute
 URL); and Pyodide runs in a **web worker**, so its errors never reach
 `page.on('console')` — attach via `page.on('workercreated')`.
-
-## Correction to IDEAS.md
-
-The "Verify the committed bundle in CI" entry says a CI job is blocked because
-`pnpm install` can't run without the sibling checkout. That is not true — CI can
-check the monorepo out alongside:
-
-```yaml
-- uses: actions/checkout@v4
-  with: { path: jbrowse-anywidget }
-- uses: actions/checkout@v4
-  with: { repository: GMOD/jbrowse-components, path: jbrowse-components }
-- run: pnpm install --frozen-lockfile=false
-  working-directory: jbrowse-components # linked pkgs resolve react/mobx here
-- run: pnpm install --frozen-lockfile=false
-  working-directory: jbrowse-anywidget
-- run: pnpm build
-```
-
-Worth running on a **nightly cron**, not just push/PR: the break is normally
-caused by a monorepo commit, so no event in this repo would fire. The render job
-needs `scripts/gen_screenshot_specs.py` first (specs are gitignored) and
-`PUPPETEER_FROM=<workspace>/jbrowse-components/package.json`.
