@@ -19,6 +19,9 @@ interface LinearGenomeViewTraits {
     CreateLinearGenomeViewOptions['aggregateTextSearchAdapters']
   >
   plugins: { name: string; url: string }[]
+  // name -> bytes; anywidget delivers a Bytes-valued dict as DataViews, which
+  // travel as binary buffers rather than JSON
+  local_files: NonNullable<CreateLinearGenomeViewOptions['localFiles']>
   location: string
   selected_feature: unknown
 }
@@ -44,6 +47,7 @@ async function optionsFromModel(model: Model) {
     assembly: model.get('assembly'),
     tracks: model.get('tracks'),
     defaultSession: sessionOrUndefined(model),
+    localFiles: model.get('local_files'),
     location: model.get('location'),
     aggregateTextSearchAdapters: searchAdapters.length
       ? searchAdapters
@@ -71,11 +75,23 @@ const render: Render<LinearGenomeViewTraits> = ({ model, el }) => {
   let controller: LinearGenomeViewController | undefined
   let destroyed = false
 
+  // registering is idempotent per name, so calling this more than once is free
+  const syncLocalFiles = () =>
+    controller?.addLocalFiles(model.get('local_files'))
+
   const handlers = {
     'change:assembly': () => controller?.setAssembly(model.get('assembly')),
     'change:default_session': () =>
       controller?.setSession(sessionOrUndefined(model)),
-    'change:tracks': () => controller?.setTracks(model.get('tracks')),
+    'change:local_files': syncLocalFiles,
+    'change:tracks': () => {
+      // sync files FIRST rather than trusting change:local_files to have run: a
+      // cell that registers a file and opens a track on it changes both traits
+      // in one message, and which change event fires first is only state-dict
+      // key order
+      syncLocalFiles()
+      controller?.setTracks(model.get('tracks'))
+    },
     'change:location': () => {
       controller?.setLocation(model.get('location')).catch((e: unknown) => {
         console.error(e)

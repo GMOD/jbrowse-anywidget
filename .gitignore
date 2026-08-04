@@ -15,3 +15,6 @@ scripts/screenshot_specs.json
 
 # the package installs with pip; a uv lock is whatever a contributor ran locally
 uv.lock
+
+# tsc --noEmit still writes this via the inherited incremental config
+tsconfig.tsbuildinfo

@@ -19,8 +19,10 @@ def features_track(rows, **kwargs):
 
 def test_rows_become_a_from_config_feature_track():
     track = features_track([{"chrom": "chr1", "start": 10, "end": 20, "score": 5}])
-    assert track["type"] == "FeatureTrack"
-    assert track["assemblyNames"] == ["hg38"]
+    # a score column means signal, so it comes back as a wiggle
+    assert track["type"] == "QuantitativeTrack"
+    # assemblyNames is left to the view
+    assert "assemblyNames" not in track
     assert track["adapter"]["type"] == "FromConfigAdapter"
     (feature,) = track["adapter"]["features"]
     assert feature == {
@@ -80,7 +82,46 @@ def test_duplicate_track_id_is_refused():
     assert [t["trackId"] for t in view.tracks] == ["features", "other"]
 
 
-def test_assembly_name_is_required_when_the_view_has_none():
+def test_add_features_works_without_an_assembly():
+    # this used to raise ValueError("no assembly set; pass assembly_name="); the
+    # name was only ever needed to stamp a field the view fills in itself
     view = LinearGenomeView()
-    with pytest.raises(ValueError, match="assembly_name"):
-        view.add_features([{"refName": "chr1", "start": 0, "end": 1}])
+    view.add_features([{"refName": "chr1", "start": 0, "end": 1}])
+    assert view.tracks[-1]["trackId"] == "features"
+
+
+def test_a_score_column_makes_a_real_wiggle():
+    # JBrowse's own name for the plotted value. Without this an in-memory signal
+    # renders as boxes you have to color by hand, never a wiggle with an axis.
+    track = features_track([{"refName": "1", "start": 0, "end": 10, "score": 5.0}])
+    assert track["type"] == "QuantitativeTrack"
+
+
+def test_no_score_column_stays_a_feature_track():
+    track = features_track([{"refName": "1", "start": 0, "end": 10}])
+    assert track["type"] == "FeatureTrack"
+
+
+def test_quantitative_can_be_forced_either_way():
+    rows = [{"refName": "1", "start": 0, "end": 10, "score": 5.0}]
+    assert features_track(rows, quantitative=False)["type"] == "FeatureTrack"
+    plain = [{"refName": "1", "start": 0, "end": 10}]
+    assert features_track(plain, quantitative=True)["type"] == "QuantitativeTrack"
+
+
+def test_color_lands_on_the_display_the_track_type_uses():
+    rows = [{"refName": "1", "start": 0, "end": 10, "score": 5.0}]
+    wiggle = features_track(rows, color="red")["displays"][0]
+    assert wiggle["type"] == "LinearWiggleDisplay"
+    boxes = features_track(rows, color="red", quantitative=False)["displays"][0]
+    assert boxes["type"] == "LinearBasicDisplay"
+
+
+def test_features_track_is_usable_without_a_widget():
+    # JBrowseApp has no add_features, so the DataFrame path has to exist as a
+    # plain config builder or multi-view apps cannot show an analysis result
+    from jbrowse_anywidget import features_track as build
+
+    conf = build([{"refName": "1", "start": 1, "end": 9}], name="peaks")
+    assert conf["trackId"] == "peaks"
+    assert conf["adapter"]["type"] == "FromConfigAdapter"

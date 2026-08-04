@@ -57,6 +57,7 @@ __all__ = [
     "LinearGenomeView",
     "JBrowseApp",
     "track",
+    "features_track",
     "view",
     "linear_view",
     "synteny_view",
@@ -91,6 +92,12 @@ class LinearGenomeView(anywidget.AnyWidget):
     default_session = traitlets.Dict().tag(sync=True)
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
+
+    # Files living in this kernel rather than at a URL, `name -> bytes`, that a
+    # track then refers to by that name as if it were one. See `add_local_file`.
+    # ipywidgets lifts bytes values out of the state dict and ships them as
+    # binary buffers, so this pays no JSON/base64 overhead.
+    local_files = traitlets.Dict(value_trait=traitlets.Bytes()).tag(sync=True)
 
     # The visible region, synced both ways. Reading it after the user has panned
     # gives back their current location.
@@ -141,6 +148,38 @@ class LinearGenomeView(anywidget.AnyWidget):
         """
         self.tracks = [*self.tracks, track]
 
+    def add_local_file(self, path: str | Path, name: str | None = None) -> str:
+        """Push a file from this kernel into the browser, and return its name.
+
+        The way to show data too big to inline. `add_features` puts every row in
+        the widget's state as JSON — fine for a few thousand, ~20MB by 200k —
+        whereas a file registered here is read *by byte range*, so an indexed
+        file stays indexed and the view only ever touches the bytes for the
+        region on screen. No web server, no CORS, no public bucket.
+
+        Refer to it afterwards exactly as you would a URL, so track-type
+        inference and index-sibling derivation work unchanged::
+
+            view.add_local_file("peaks.bed.gz")     # picks up peaks.bed.gz.tbi
+            view.add_track("peaks.bed.gz")
+
+        A conventional sibling index (`.tbi`/`.csi`/`.bai`/`.crai`) next to
+        `path` is registered too, since that is the name the adapter asks for.
+        Write the file with whatever you already use — pysam's `tabix_index`,
+        pyBigWig, `bedGraphToBigWig` — then hand it over here.
+        """
+        path = Path(path)
+        name = name or path.name
+        files = {name: path.read_bytes()}
+        for suffix in (".tbi", ".csi", ".bai", ".crai", ".fai", ".gzi"):
+            index = path.with_name(path.name + suffix)
+            if index.exists():
+                files[name + suffix] = index.read_bytes()
+        # one assignment: traitlets syncs per trait, so mutating in place would
+        # never reach the browser
+        self.local_files = {**self.local_files, **files}
+        return name
+
     def add_features(
         self,
         features: FeatureSource,
@@ -148,6 +187,7 @@ class LinearGenomeView(anywidget.AnyWidget):
         track_id: str | None = None,
         assembly_name: str | None = None,
         color: str | None = None,
+        quantitative: bool | None = None,
     ) -> None:
         """Add an in-memory feature track from a pandas DataFrame or list of dicts.
 
@@ -158,6 +198,13 @@ class LinearGenomeView(anywidget.AnyWidget):
         feature and show in its details. `color` sets the feature fill — a CSS
         color, or a `jexl:` expression over those columns, e.g.
         "jexl:get(feature,'score') > 0 ? 'red' : 'blue'".
+
+        A `score` column makes this a wiggle — see `features_track`, which
+        builds the config this sends.
+
+        Inlining puts every row in the widget's state as JSON, which is right up
+        to a few thousand and stops scaling well past that; `add_local_file` is
+        the route for anything bigger.
         """
         track_id = track_id if track_id else _slug(name)
         if any(t.get("trackId") == track_id for t in self.tracks):
@@ -167,63 +214,32 @@ class LinearGenomeView(anywidget.AnyWidget):
                 f'a track with trackId "{track_id}" is already on this view; '
                 "pass a different name= or track_id="
             )
-        track = {
-            "type": "FeatureTrack",
-            "trackId": track_id,
-            "name": name,
-            "assemblyNames": [self._assembly_name(assembly_name)],
-            "adapter": {
-                "type": "FromConfigAdapter",
-                "features": _to_features(features, track_id),
-            },
-        }
-        if color:
-            # displayId is derived from the trackId by core, so it stays out
-            track["displays"] = [{"type": "LinearBasicDisplay", "color": color}]
-        self.add_track(track)
-
-    def _resolved_assembly_name(self) -> str | None:
-        # A config dict carries its name under "name". A string is either a
-        # sequence-file URL the view builds an assembly from (name derived from
-        # the file, matching makeAssembly) or a hub name that is itself the
-        # resolved name. Returns None when unset.
-        if isinstance(self.assembly, str):
-            if not self.assembly:
-                return None
-            if _is_sequence_uri(self.assembly):
-                return _assembly_name_from_uri(self.assembly)
-            return self.assembly
-        return self.assembly.get("name") or None
-
-    def _assembly_name(self, assembly_name: str | None) -> str:
-        name = assembly_name or self._resolved_assembly_name()
-        if not name:
-            raise ValueError("no assembly set; pass assembly_name=")
-        return name
-
-    @traitlets.observe("assembly")
-    def _backfill_assembly_names(self, change: Any) -> None:
-        # tracks set before the assembly missed the backfill below; re-running
-        # the validator over them fills it in now that a name exists
-        if self.tracks:
-            self.tracks = list(self.tracks)
+        self.add_track(
+            features_track(
+                features,
+                name=name,
+                track_id=track_id,
+                assembly_name=assembly_name,
+                color=color,
+                quantitative=quantitative,
+            )
+        )
 
     @traitlets.validate("tracks")
     def _normalize_tracks(self, proposal: Any) -> list[JsonDict]:
         # Each entry is a full JBrowse track config dict, a bare data-file URI,
         # or a (uri, index) pair — so tracks=["a.bw", ("s.bam", "s.bai")] just
-        # works; the bare/pair forms become loose {"uri": ...} specs the view
-        # expands. Then backfill assemblyNames from the view's own assembly,
-        # since repeating it on every track is noise; an explicit assemblyNames
-        # (e.g. a synteny track) is left untouched.
-        name = self._resolved_assembly_name()
-        out = []
-        for item in proposal["value"]:
-            conf = _normalize_track(item)
-            if name and not conf.get("assemblyNames"):
-                conf = {**conf, "assemblyNames": [name]}
-            out.append(conf)
-        return out
+        # works. Only the pair needs unpacking here — JSON has no tuple, so it
+        # would reach the view as a 2-element array read as a config; the view
+        # takes a bare URI string itself.
+        #
+        # assemblyNames is deliberately NOT filled in here. The view stamps its
+        # own resolved assembly onto any track that omits it, and knows that
+        # name even when `assembly=` was a hub name it had to fetch — which this
+        # side could only guess at. Stamping here also could not survive
+        # `view.assembly = ...`: the view only fills an ABSENT assemblyNames, so
+        # the stale stamp won and the track silently stopped displaying.
+        return [_normalize_track(item) for item in proposal["value"]]
 
 
 class JBrowseApp(anywidget.AnyWidget):
@@ -506,6 +522,52 @@ def track(
     )
 
 
+def features_track(
+    features: FeatureSource,
+    name: str = "features",
+    track_id: str | None = None,
+    assembly_name: str | None = None,
+    color: str | None = None,
+    quantitative: bool | None = None,
+) -> JsonDict:
+    """Build a track config from a DataFrame or list of dicts, inlining the rows.
+
+    The builder behind `LinearGenomeView.add_features`, separate so the config
+    can go anywhere a track config can — `JBrowseApp(tracks=[...])` included,
+    which has no `add_features` of its own.
+
+    Rows need refName (or chrom/chr), start, end (0-based half-open); every
+    other column rides onto its feature. `color` is a CSS color or a `jexl:`
+    expression over those columns.
+
+    A **`score`** column makes this a `QuantitativeTrack` — a real wiggle, with
+    a value axis and autoscaling, rather than boxes to color by hand. `score` is
+    JBrowse's own name for the plotted value, so a column called `depth` or
+    `signal` will not do it; rename, or pass `quantitative=` to decide outright.
+
+    `assembly_name` is only needed to pin the track to something other than the
+    view's own assembly, which it otherwise picks up.
+    """
+    track_id = track_id if track_id else _slug(name)
+    rows = _to_features(features, track_id)
+    if quantitative is None:
+        quantitative = any("score" in row for row in rows)
+    track: JsonDict = {
+        "type": "QuantitativeTrack" if quantitative else "FeatureTrack",
+        "trackId": track_id,
+        "name": name,
+        "adapter": {"type": "FromConfigAdapter", "features": rows},
+    }
+    if assembly_name:
+        track["assemblyNames"] = [assembly_name]
+    if color:
+        # the color slot lives on the display, and each track type has its own;
+        # displayId is derived from the trackId by core, so it stays out
+        display = "LinearWiggleDisplay" if quantitative else "LinearBasicDisplay"
+        track["displays"] = [{"type": display, "color": color}]
+    return track
+
+
 def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:
     rows = _rows(features)
     out = []
@@ -555,23 +617,8 @@ def _slug(text: str) -> str:
     return "".join(c if c.isalnum() else "-" for c in str(text).lower()).strip("-")
 
 
-# sequence extensions the view's own guesser recognizes; kept in sync with
-# makeAssembly.ts in @jbrowse/embedded-linear-genome-view
-_SEQUENCE_EXT_RE = re.compile(r"\.(fa|fasta|fas|fna|mfa|2bit)(\.b?gz)?$", re.I)
-
-
 def _clean_uri(uri: str) -> str:
     return re.split(r"[?#]", uri, maxsplit=1)[0]
-
-
-def _is_sequence_uri(uri: str) -> bool:
-    # true when a string names a sequence file (vs. a hub name like "hg38")
-    return bool(_SEQUENCE_EXT_RE.search(_clean_uri(uri)))
-
-
-def _assembly_name_from_uri(uri: str) -> str:
-    # strip path and sequence extension: ".../hg19.fa.gz" -> "hg19"
-    return _SEQUENCE_EXT_RE.sub("", _clean_uri(uri).rstrip("/").rsplit("/", 1)[-1])
 
 
 _GENOMES = "https://jbrowse.org"

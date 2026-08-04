@@ -39,6 +39,9 @@ const TYPES = {
   '.css': 'text/css',
   '.html': 'text/html',
   '.json': 'application/json',
+  '.gz': 'application/octet-stream',
+  '.tbi': 'application/octet-stream',
+  '.bw': 'application/octet-stream',
 }
 
 // A page that imports a built bundle and renders it with a fake anywidget model
@@ -52,6 +55,19 @@ const harness = `<!doctype html><html><head><meta charset="utf8">
 const p = new URLSearchParams(location.search)
 const mod = await import('/jbrowse_anywidget/static/' + p.get('bundle'))
 const store = { ...window.__traits }
+// Kernel-local files reach the widget as binary buffers, which anywidget hands
+// to JS as DataViews. Rebuild that shape by fetching the fixtures, so the
+// blob/byte-range read path is exercised exactly as it is in a notebook.
+if (window.__localFileUrls) {
+  store.local_files = Object.fromEntries(
+    await Promise.all(
+      Object.entries(window.__localFileUrls).map(async ([name, url]) => [
+        name,
+        new DataView(await (await fetch(url)).arrayBuffer()),
+      ]),
+    ),
+  )
+}
 const model = {
   get: k => store[k],
   set: (k, v) => { store[k] = v },
@@ -139,9 +155,14 @@ async function capture(name, spec) {
       deviceScaleFactor: 2,
     })
     page.on('pageerror', e => errors.push(String(e)))
-    await page.evaluateOnNewDocument(t => {
-      window.__traits = t
-    }, spec.traits)
+    await page.evaluateOnNewDocument(
+      (t, f) => {
+        window.__traits = t
+        window.__localFileUrls = f
+      },
+      spec.traits,
+      spec.localFileUrls ?? null,
+    )
     await page.goto(
       `http://localhost:${port}/harness.html?bundle=${spec.bundle}`,
       {

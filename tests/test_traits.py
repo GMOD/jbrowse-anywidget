@@ -32,6 +32,7 @@ def test_linear_genome_view_syncs_its_config_traits():
         "default_session",
         "aggregate_text_search_adapters",
         "plugins",
+        "local_files",
         "location",
         "selected_feature",
     }
