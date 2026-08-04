@@ -18,7 +18,9 @@ interface JBrowseAppTraits {
   tracks: CreateAppOptions['tracks']
   views: NonNullable<CreateAppOptions['views']>
   plugins: { name: string; url: string }[]
+  session: NonNullable<CreateAppOptions['session']>
   view_locations: (string | string[] | undefined)[]
+  current_session: unknown
   selected_feature: unknown
 }
 
@@ -35,8 +37,16 @@ async function optionsFromModel(model: Model) {
     assemblies: model.get('assemblies'),
     tracks: model.get('tracks'),
     views: model.get('views'),
+    session: sessionOrUndefined(model),
     plugins: loaded.map(p => p.plugin),
   }
+}
+
+// An empty dict is the trait's "unset": the app then opens the `views` it was
+// declared with, which is also where setSession(undefined) returns it to.
+function sessionOrUndefined(model: Model) {
+  const session = model.get('session')
+  return session && Object.keys(session).length > 0 ? session : undefined
 }
 
 interface MaybeFeature {
@@ -77,6 +87,30 @@ function viewLocation(view: MaybeComparativeView) {
       : undefined
 }
 
+interface MaybeSession {
+  views: (MaybeComparativeView & {
+    id?: string
+    tracks?: { configuration: { trackId: string } }[]
+  })[]
+}
+
+// The signal the session read-back rides on: which views exist, what each has
+// open, and where each is looking. Deliberately NOT the whole snapshot —
+// reading that would make the autorun depend on offsetPx, and a snapshot is
+// kilobytes, so a drag would push one per pointer event through the comm.
+// coarseVisibleLocStrings is JBrowse's own debounced (500ms) location, so this
+// settles after a pan rather than firing during it.
+function layoutSignal(session: MaybeSession) {
+  return session.views
+    .map(
+      view =>
+        `${view.id}:${JSON.stringify(viewLocation(view))}:${(view.tracks ?? [])
+          .map(t => t.configuration.trackId)
+          .join(',')}`,
+    )
+    .join('|')
+}
+
 const render: Render<JBrowseAppTraits> = ({ model, el }) => {
   let controller: JBrowseAppController | undefined
   let disposers: (() => void)[] = []
@@ -105,9 +139,23 @@ const render: Render<JBrowseAppTraits> = ({ model, el }) => {
     }
     controller = createApp(el, options)
     const { session } = controller.viewState
+    const { viewState } = controller
     disposers.push(
       autorun(() => {
         model.set('view_locations', session.views.map(viewLocation))
+        // The other half of `session`, and deliberately a DIFFERENT trait: the
+        // arrangement the user built by hand comes back as the same plain JSON,
+        // ready to hand straight back in. Writing it to `session` itself would
+        // echo (model.set fires change:session here too) and would silently
+        // override the `views` a later rebuild is meant to show.
+        //
+        // untracked so the snapshot read adds no dependencies — layoutSignal is
+        // what decides when this runs.
+        layoutSignal(session)
+        model.set(
+          'current_session',
+          untracked(() => getSessionSnapshot(viewState)),
+        )
         model.save_changes()
       }),
     )
@@ -133,19 +181,25 @@ const render: Render<JBrowseAppTraits> = ({ model, el }) => {
 
   // config traits are declarative; a change rebuilds the whole app (views are
   // not a hot path like panning, which the autoruns above handle live)
-  const events = [
-    'change:assemblies',
-    'change:tracks',
-    'change:views',
-    'change:plugins',
-  ]
-  for (const event of events) {
-    model.on(event, rebuild)
+  // a session is state, not config: swapping it in place keeps the engine (and
+  // its resolved assemblies and RPC workers) rather than rebuilding
+  const restore = () => {
+    controller?.setSession(sessionOrUndefined(model))
+  }
+  const handlers: Record<string, () => void> = {
+    'change:assemblies': rebuild,
+    'change:tracks': rebuild,
+    'change:views': rebuild,
+    'change:plugins': rebuild,
+    'change:session': restore,
+  }
+  for (const [event, handler] of Object.entries(handlers)) {
+    model.on(event, handler)
   }
 
   return () => {
-    for (const event of events) {
-      model.off(event, rebuild)
+    for (const [event, handler] of Object.entries(handlers)) {
+      model.off(event, handler)
     }
     teardown()
   }

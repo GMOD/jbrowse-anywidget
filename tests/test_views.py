@@ -86,3 +86,24 @@ def test_jbrowse_app_stores_declarative_config():
     )
     assert [a["name"] for a in app.assemblies] == ["hg38", "mm39"]
     assert app.views[0]["type"] == "LinearSyntenyView"
+
+
+def test_jbrowse_app_carries_a_session_snapshot():
+    snapshot = {"name": "saved", "views": [{"type": "LinearGenomeView"}]}
+    app = JBrowseApp(
+        assemblies=[{"name": "hg38"}],
+        views=[linear_view("hg38")],
+        session=snapshot,
+    )
+    assert app.session == snapshot
+    # views still describes the app's own starting state, so File > New session
+    # returns there rather than to the restored snapshot
+    assert app.views[0]["type"] == "LinearGenomeView"
+
+
+def test_jbrowse_app_opens_its_views_when_no_session_is_given():
+    app = JBrowseApp(assemblies=[{"name": "hg38"}], views=[linear_view("hg38")])
+    assert app.session == {}
+    # the read-back is a separate trait, so the live state can never overwrite
+    # the session that was handed in
+    assert app.current_session == {}

@@ -44,7 +44,9 @@ def test_jbrowse_app_syncs_its_config_traits():
         "tracks",
         "views",
         "plugins",
+        "session",
         "view_locations",
+        "current_session",
         "selected_feature",
     }
 

@@ -285,12 +285,30 @@ class JBrowseApp(anywidget.AnyWidget):
     views = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
 
+    # A whole session snapshot to open instead of `views` — the plain JSON
+    # JBrowse serializes its own state into, so a layout arranged by hand (or
+    # saved from an earlier run) replays exactly. Unlike the config traits above
+    # this swaps the session in place rather than rebuilding, and `views` stays
+    # the app's own starting state, so File > New session returns there. Set it
+    # to {} to go back to `views`.
+    session = traitlets.Dict().tag(sync=True)
+
     # Read-back only (JS -> Python), one entry per view in `views`, updated as
     # the user pans/zooms — the same live sync the single-view LinearGenomeView
     # has, extended to every view. A linear view reports its visible region as a
     # locstring ("ctgA:1..5,000"); a synteny/dotplot view reports the list of its
     # two panels' locstrings. Observe it with `app.observe(handler, "view_locations")`.
     view_locations = traitlets.List().tag(sync=True)
+
+    # Read-back only (JS -> Python): the live session, in the shape `session`
+    # accepts, so an arrangement round-trips —
+    # `JBrowseApp(..., session=saved)` where `saved = app.current_session`.
+    # A separate trait from `session` on purpose: writing the live state back
+    # into the input would echo, and would override the `views` a later change
+    # is meant to show. Updated on the coarse cadence described in app.ts —
+    # which views exist, what each has open, where each is looking — not per pan
+    # frame.
+    current_session = traitlets.Dict().tag(sync=True)
 
     # Read-back only (JS -> Python): the most recently clicked feature, in any
     # view, as a plain dict. `None` until one is selected.
@@ -304,6 +322,7 @@ class JBrowseApp(anywidget.AnyWidget):
         tracks: list[JsonDict] | None = None,
         views: list[JsonDict] | None = None,
         plugins: list[str | JsonDict] | None = None,
+        session: JsonDict | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -315,6 +334,8 @@ class JBrowseApp(anywidget.AnyWidget):
             self.views = list(views)
         if plugins is not None:
             self.plugins = [plugin(p) for p in plugins]
+        if session is not None:
+            self.session = session
 
 
 PLUGIN_STORE = "https://jbrowse.org/plugin-store/plugins.json"
