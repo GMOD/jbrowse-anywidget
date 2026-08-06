@@ -2,11 +2,13 @@ import '@fontsource/roboto'
 import '@jbrowse/react-app2/styles.css'
 
 import {
+  type AssemblyInput,
   type CreateAppOptions,
   type JBrowseAppController,
   type ViewLocation,
   createApp,
   loadPlugins,
+  resolveAssemblies,
 } from '@jbrowse/react-app2'
 
 import { type PluginSpec, defineWidget } from './widget'
@@ -16,11 +18,12 @@ import type { AnyModel } from '@anywidget/types'
 // The Python-side traits of jbrowse_anywidget.JBrowseApp, as they arrive here.
 // Keep in step with the traitlets declared on that class.
 interface JBrowseAppTraits {
-  assemblies: CreateAppOptions['assemblies']
+  assemblies: AssemblyInput[]
   tracks: CreateAppOptions['tracks']
   views: NonNullable<CreateAppOptions['views']>
   plugins: PluginSpec[]
   session: NonNullable<CreateAppOptions['session']>
+  local_files: NonNullable<CreateAppOptions['localFiles']>
   view_locations: ViewLocation[]
   current_session: unknown
   selected_feature: unknown
@@ -48,9 +51,18 @@ function sessionOrUndefined(model: Model) {
 // records go through whole rather than mapped to `.plugin`, since the definition
 // is what lets the RPC worker load the same plugin.
 async function optionsFromModel(model: Model): Promise<CreateAppOptions> {
+  // `assemblies` takes the same vocabulary the single-view widget's `assembly`
+  // does — a hub name ("hg38"), a sequence URI, a hub config, or a full
+  // assembly config. resolveAssemblies is the product's own resolution, which
+  // is why the Python side no longer has to fetch a hub itself.
+  const { assemblies, aggregateTextSearchAdapters } = await resolveAssemblies(
+    model.get('assemblies'),
+  )
   return {
-    assemblies: model.get('assemblies'),
+    assemblies,
+    aggregateTextSearchAdapters,
     tracks: model.get('tracks'),
+    localFiles: model.get('local_files'),
     views: model.get('views'),
     session: sessionOrUndefined(model),
     plugins: await loadPlugins(model.get('plugins')),

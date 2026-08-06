@@ -78,7 +78,51 @@ TrackEntry = Union[str, "tuple[str, str]", JsonDict]
 FeatureSource = Union["pd.DataFrame", "Iterable[Mapping[str, Any]]"]
 
 
-class LinearGenomeView(anywidget.AnyWidget):
+class _LocalFilesMixin(traitlets.HasTraits):
+    """Files living in this kernel rather than at a URL, shared by both widgets.
+
+    `name -> bytes`, which a track then refers to by that name as if it were a
+    URL. ipywidgets lifts bytes values out of the state dict and ships them as
+    binary buffers, so this pays no JSON/base64 overhead.
+    """
+
+    local_files = traitlets.Dict(value_trait=traitlets.Bytes()).tag(sync=True)
+
+    def add_local_file(self, path: str | Path, name: str | None = None) -> str:
+        """Push a file from this kernel into the browser, and return its name.
+
+        The way to show data too big to inline. `add_features` puts every row in
+        the widget's state as JSON — fine for a few thousand, ~20MB by 200k —
+        whereas a file registered here is read *by byte range*, so an indexed
+        file stays indexed and the view only ever touches the bytes for the
+        region on screen. No web server, no CORS, no public bucket.
+
+        Refer to it afterwards exactly as you would a URL, so track-type
+        inference and index-sibling derivation work unchanged::
+
+            view.add_local_file("peaks.bed.gz")     # picks up peaks.bed.gz.tbi
+            view.add_track("peaks.bed.gz")
+
+        A conventional sibling index (`.tbi`/`.csi`/`.bai`/`.crai`) next to
+        `path` is registered too, since that is the name the adapter asks for.
+        Write the file with whatever you already use — pysam's `tabix_index`,
+        pyBigWig, `bedGraphToBigWig` — then hand it over here.
+        """
+        path = Path(path)
+        name = name or path.name
+        files = {name: path.read_bytes()}
+        for suffix in (".tbi", ".csi", ".bai", ".crai", ".fai", ".gzi"):
+            index = path.with_name(path.name + suffix)
+            if index.exists():
+                files[name + suffix] = index.read_bytes()
+        # one assignment: traitlets syncs per trait, so mutating in place would
+        # never reach the browser
+        self.local_files = {**self.local_files, **files}
+        return name
+
+
+
+class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
     _esm = _STATIC / "index.js"
     _css = _STATIC / "jbrowse-anywidget.css"
 
@@ -94,11 +138,6 @@ class LinearGenomeView(anywidget.AnyWidget):
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
 
-    # Files living in this kernel rather than at a URL, `name -> bytes`, that a
-    # track then refers to by that name as if it were one. See `add_local_file`.
-    # ipywidgets lifts bytes values out of the state dict and ships them as
-    # binary buffers, so this pays no JSON/base64 overhead.
-    local_files = traitlets.Dict(value_trait=traitlets.Bytes()).tag(sync=True)
 
     # The visible region, synced both ways. Reading it after the user has panned
     # gives back their current location.
@@ -149,37 +188,6 @@ class LinearGenomeView(anywidget.AnyWidget):
         """
         self.tracks = [*self.tracks, track]
 
-    def add_local_file(self, path: str | Path, name: str | None = None) -> str:
-        """Push a file from this kernel into the browser, and return its name.
-
-        The way to show data too big to inline. `add_features` puts every row in
-        the widget's state as JSON — fine for a few thousand, ~20MB by 200k —
-        whereas a file registered here is read *by byte range*, so an indexed
-        file stays indexed and the view only ever touches the bytes for the
-        region on screen. No web server, no CORS, no public bucket.
-
-        Refer to it afterwards exactly as you would a URL, so track-type
-        inference and index-sibling derivation work unchanged::
-
-            view.add_local_file("peaks.bed.gz")     # picks up peaks.bed.gz.tbi
-            view.add_track("peaks.bed.gz")
-
-        A conventional sibling index (`.tbi`/`.csi`/`.bai`/`.crai`) next to
-        `path` is registered too, since that is the name the adapter asks for.
-        Write the file with whatever you already use — pysam's `tabix_index`,
-        pyBigWig, `bedGraphToBigWig` — then hand it over here.
-        """
-        path = Path(path)
-        name = name or path.name
-        files = {name: path.read_bytes()}
-        for suffix in (".tbi", ".csi", ".bai", ".crai", ".fai", ".gzi"):
-            index = path.with_name(path.name + suffix)
-            if index.exists():
-                files[name + suffix] = index.read_bytes()
-        # one assignment: traitlets syncs per trait, so mutating in place would
-        # never reach the browser
-        self.local_files = {**self.local_files, **files}
-        return name
 
     def add_features(
         self,
@@ -243,7 +251,7 @@ class LinearGenomeView(anywidget.AnyWidget):
         return [_normalize_track(item) for item in proposal["value"]]
 
 
-class JBrowseApp(anywidget.AnyWidget):
+class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
     """The full JBrowse 2 app — any number of views of any type, declared up front.
 
     Where `LinearGenomeView` shows a single linear view, this drives the whole
@@ -261,7 +269,13 @@ class JBrowseApp(anywidget.AnyWidget):
 
     Unlike `LinearGenomeView`, `tracks` here are full JBrowse track config dicts
     (a synteny track spans two assemblies, so there's no single-assembly
-    shorthand to infer); `synteny_track` builds the common PAF case.
+    shorthand to infer); `synteny_track` builds the common PAF case. An
+    `assemblies` entry may be a hub name, though::
+
+        JBrowseApp(assemblies=["hg38", "mm39"], views=[...])
+
+    `add_local_file` works here too, so a track config can name a file from
+    this kernel instead of a URL.
 
     `plugins=[...]` loads JBrowse plugins at runtime (see `plugin`), which is
     how view types that don't ship in the bundle — a 3D protein structure, an
@@ -278,9 +292,11 @@ class JBrowseApp(anywidget.AnyWidget):
     _esm = _STATIC / "app.js"
     _css = _STATIC / "jbrowse-anywidget.css"
 
-    # Config, pushed Python -> JS. assemblies/tracks are JBrowse config-dict
-    # lists; views is the [{type, init}] list of views to open. A change to any
-    # rebuilds the app.
+    # Config, pushed Python -> JS. Each `assemblies` entry is a config dict, a
+    # hub name ("hg38", "GCF_..."), or a sequence-file URL, the same vocabulary
+    # LinearGenomeView's `assembly` takes -- the JS side resolves all four, so
+    # `fetch_hub` is a convenience here rather than a requirement. `views` is
+    # the [{type, init}] list of views to open. A change to any rebuilds.
     assemblies = traitlets.List().tag(sync=True)
     tracks = traitlets.List().tag(sync=True)
     views = traitlets.List().tag(sync=True)

@@ -9,6 +9,28 @@ interface Controller {
   destroy: () => void
 }
 
+const ERROR_CLASS = 'jbrowse-anywidget-error'
+
+// A failed build otherwise leaves an empty output cell with the reason only in
+// the browser's devtools console — which a notebook user has no reason to have
+// open, and which the kernel never sees.
+function showError(el: HTMLElement, e: unknown) {
+  const box = document.createElement('pre')
+  box.className = ERROR_CLASS
+  box.style.cssText =
+    'margin:0;padding:8px;overflow:auto;white-space:pre-wrap;' +
+    'font-family:monospace;font-size:12px;color:#a00;background:#fff5f5;' +
+    'border:1px solid #a00;box-sizing:border-box'
+  box.textContent = `JBrowse failed to render\n\n${e instanceof Error ? (e.stack ?? e.message) : String(e)}`
+  el.append(box)
+}
+
+function clearError(el: HTMLElement) {
+  for (const node of el.querySelectorAll(`.${ERROR_CLASS}`)) {
+    node.remove()
+  }
+}
+
 export interface WidgetShell<C> {
   /**
    * The live controller, or undefined while a build is in flight. A function
@@ -52,6 +74,7 @@ export function defineWidget<Traits extends object, C extends Controller>(
 
     const rebuild = () => {
       teardown()
+      clearError(el)
       const token = ++seq
       build(el, model)
         .then(built => {
@@ -63,6 +86,9 @@ export function defineWidget<Traits extends object, C extends Controller>(
         })
         .catch((e: unknown) => {
           console.error(e)
+          if (token === seq) {
+            showError(el, e)
+          }
         })
     }
 
