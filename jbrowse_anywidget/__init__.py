@@ -126,15 +126,19 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
     _esm = _STATIC / "index.js"
     _css = _STATIC / "jbrowse-anywidget.css"
 
-    # Config, pushed Python -> JS. tracks/default_session are JBrowse config
-    # dicts; a change to them updates the view. assembly is a config dict, a hub
-    # name ("hg38", "GCF_..."), or a sequence-file URL — the JS side fetches or
+    # Config, pushed Python -> JS. tracks/session are JBrowse config dicts; a
+    # change to them updates the view. assembly is a config dict, a hub name
+    # ("hg38", "GCF_..."), or a sequence-file URL — the JS side fetches or
     # builds an assembly from the latter two.
+    #
+    # `session` is a saved layout to open instead of tracks/location: what
+    # JBrowseApp reports back, or a decoded share link. Same name on both
+    # widgets, and the same name the JS products give it.
     assembly = traitlets.Union(
         [traitlets.Unicode(), traitlets.Dict()], default_value={}
     ).tag(sync=True)
     tracks = traitlets.List().tag(sync=True)
-    default_session = traitlets.Dict().tag(sync=True)
+    session = traitlets.Dict().tag(sync=True)
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
 
@@ -155,7 +159,7 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
         assembly: str | JsonDict | None = None,
         location: str = "",
         tracks: list[TrackEntry] | None = None,
-        default_session: JsonDict | None = None,
+        session: JsonDict | None = None,
         plugins: list[str | JsonDict] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -164,8 +168,8 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
             self.assembly = assembly
         if tracks is not None:
             self.tracks = list(tracks)
-        if default_session is not None:
-            self.default_session = default_session
+        if session is not None:
+            self.session = session
         if plugins is not None:
             self.plugins = [plugin(p) for p in plugins]
         if location:

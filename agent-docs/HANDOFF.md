@@ -91,7 +91,7 @@ isn't about them; `git checkout images/` after a verification run.
 and build again` spelled as methods; the third reconciled a track list, which
 had to answer what it does to a track the user opened by hand (it closed it).
 
-What that means here: `change:assembly` and `change:default_session` now call
+What that means here: `change:assembly` and `change:session` now call
 the shell's `rebuild`, which is exactly what those setters did internally, so
 nothing changed for a notebook. `change:tracks` is the one that needed work,
 because a notebook drives it in a loop — `09_interactive_controls` sets

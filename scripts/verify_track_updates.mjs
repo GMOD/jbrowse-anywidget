@@ -160,7 +160,7 @@ try {
     {
       assembly: ASSEMBLY,
       tracks: [track('first', 'First')],
-      default_session: {},
+      session: {},
       aggregate_text_search_adapters: [],
       local_files: {},
       plugins: [],

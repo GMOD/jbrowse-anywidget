@@ -29,7 +29,7 @@ def test_linear_genome_view_syncs_its_config_traits():
     assert own_traits(LinearGenomeView()) == {
         "assembly",
         "tracks",
-        "default_session",
+        "session",
         "aggregate_text_search_adapters",
         "plugins",
         "local_files",

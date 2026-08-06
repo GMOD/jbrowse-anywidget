@@ -16,7 +16,7 @@ import type { AnyModel } from '@anywidget/types'
 interface LinearGenomeViewTraits {
   assembly: CreateLinearGenomeViewOptions['assembly']
   tracks: NonNullable<CreateLinearGenomeViewOptions['tracks']>
-  default_session: NonNullable<CreateLinearGenomeViewOptions['defaultSession']>
+  session: NonNullable<CreateLinearGenomeViewOptions['session']>
   aggregate_text_search_adapters: NonNullable<
     CreateLinearGenomeViewOptions['aggregateTextSearchAdapters']
   >
@@ -32,7 +32,7 @@ type Model = AnyModel<LinearGenomeViewTraits>
 
 // An empty dict is the trait's "unset"
 function sessionOrUndefined(model: Model) {
-  const session = model.get('default_session')
+  const session = model.get('session')
   return Object.keys(session).length > 0 ? session : undefined
 }
 
@@ -48,7 +48,7 @@ async function optionsFromModel(
     plugins: await loadPlugins(model.get('plugins')),
     assembly: model.get('assembly'),
     tracks: model.get('tracks'),
-    defaultSession: sessionOrUndefined(model),
+    session: sessionOrUndefined(model),
     localFiles: model.get('local_files'),
     location: model.get('location'),
     aggregateTextSearchAdapters: searchAdapters.length
@@ -114,7 +114,7 @@ export default {
         // their own tracks into. Rebuilding here is what those did, minus a
         // controller API per trait.
         'change:assembly': rebuild,
-        'change:default_session': rebuild,
+        'change:session': rebuild,
         // Expressed with addTrack/removeTrack rather than a controller-side
         // bulk setter, which is both smaller upstream and better behaved: only
         // tracks the notebook itself declared are closed, so one the *user*

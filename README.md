@@ -190,7 +190,7 @@ view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':
 That is the whole design. Python adds only what JSON cannot express itself — a
 DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
 network fetch (`fetch_hub`, `plugin`). Everything else is
-`add_track(<config dict>)`, or whole `tracks=[...]` / `default_session={...}`
+`add_track(<config dict>)`, or whole `tracks=[...]` / `session={...}`
 configs on the constructor. Nothing here has to grow when JBrowse gains a track
 type, an adapter, or a display. Tracks are opened in the view automatically;
 removing one from `view.tracks` closes it.
