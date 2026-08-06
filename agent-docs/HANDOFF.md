@@ -84,6 +84,35 @@ real wiggle with a value axis — only when a column is literally named `score`.
 PNGs even with no code change. Don't commit regenerated figures in a change that
 isn't about them; `git checkout images/` after a verification run.
 
+## The controller has no bulk setters any more
+
+`setAssembly`, `setSession` and `setTracks` were removed from
+`LinearGenomeViewController` upstream (2026-08-06). The first two were `destroy
+and build again` spelled as methods; the third reconciled a track list, which
+had to answer what it does to a track the user opened by hand (it closed it).
+
+What that means here: `change:assembly` and `change:default_session` now call
+the shell's `rebuild`, which is exactly what those setters did internally, so
+nothing changed for a notebook. `change:tracks` is the one that needed work,
+because a notebook drives it in a loop — `09_interactive_controls` sets
+`view.tracks = []` and then adds one, twice per slider step, and a rebuild each
+time would re-resolve the assembly and start a new RPC worker mid-drag. It now
+diffs by trackId and calls `addTrack`/`removeTrack`, falling back to a rebuild
+when any entry is a loose spec (no trackId to diff on). That is also better than
+the setter was: only tracks this widget declared are closed, so one the user
+opened by hand survives a re-run.
+
+**`appliedTracks` is a WeakMap keyed by model, not a plain variable**, because
+`defineWidget` takes the build and the handlers once at module scope and calls
+them per rendered widget — a closure variable would be shared by two views in
+one notebook.
+
+`scripts/verify_track_updates.mjs` covers it in a real browser, on the nightly
+render workflow. Note what it does NOT assert: DOM node identity. React
+legitimately replaces the header's nodes when the track list changes, so an
+identity check reads as a rebuild that never happened — it counts container
+unmounts instead. That cost a debugging round; don't reintroduce it.
+
 ## Known broken / unresolved
 
 Nothing outstanding.
