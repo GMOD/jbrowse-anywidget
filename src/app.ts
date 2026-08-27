@@ -11,7 +11,12 @@ import {
   resolveAssemblies,
 } from '@jbrowse/react-app2'
 
-import { type PluginSpec, defineWidget } from './widget'
+import {
+  type PluginSpec,
+  defineWidget,
+  report,
+  sessionOrUndefined,
+} from './widget'
 
 import type { AnyModel } from '@anywidget/types'
 
@@ -30,19 +35,6 @@ interface JBrowseAppTraits {
 }
 
 type Model = AnyModel<JBrowseAppTraits>
-
-// Push one trait to the kernel. Every read-back is this shape.
-function report(model: Model, trait: keyof JBrowseAppTraits, value: unknown) {
-  model.set(trait, value)
-  model.save_changes()
-}
-
-// An empty dict is the trait's "unset": the app then opens the `views` it was
-// declared with, which is also where setSession(undefined) returns it to.
-function sessionOrUndefined(model: Model) {
-  const session = model.get('session')
-  return session && Object.keys(session).length > 0 ? session : undefined
-}
 
 // The widget's traits map straight onto createApp's declarative options:
 // assemblies + tracks are config lists, views is the [{type, init}] list that
@@ -85,6 +77,10 @@ async function optionsFromModel(model: Model): Promise<CreateAppOptions> {
 
 export default {
   render: defineWidget<JBrowseAppTraits, JBrowseAppController>(
+    // createApp is synchronous throughout, so a build that throws — a bad
+    // assembly, a plugin that will not fetch — reaches the shell's own catch
+    // and the cell shows it. The single-view product needs an onError because
+    // its build is asynchronous inside the constructor; this one does not.
     async (el, model) => createApp(el, await optionsFromModel(model)),
     ({ controller, rebuild }, model) => ({
       // config traits are declarative; a change rebuilds the whole app (views

@@ -9,6 +9,30 @@ interface Controller {
   destroy: () => void
 }
 
+type Traits = Record<string, any>
+
+/** Push one trait to the kernel. Every JS -> Python read-back is this shape. */
+export function report<T extends Traits, K extends keyof T>(
+  model: AnyModel<T>,
+  trait: K,
+  value: T[K],
+) {
+  model.set(trait, value)
+  model.save_changes()
+}
+
+/**
+ * An empty dict is the `session` trait's "unset". Shared by both widgets: a
+ * traitlets Dict has no null, so the products' `undefined` — open the declared
+ * views/tracks instead — has to be spelled some other way on the wire.
+ */
+export function sessionOrUndefined<T extends Traits & { session: object }>(
+  model: AnyModel<T>,
+) {
+  const session = model.get('session')
+  return session && Object.keys(session).length > 0 ? session : undefined
+}
+
 const ERROR_CLASS = 'jbrowse-anywidget-error'
 
 // A failed build otherwise leaves an empty output cell with the reason only in
@@ -55,9 +79,18 @@ export interface WidgetShell<C> {
  * they were asked for, so each takes a token and drops itself if a newer one
  * started meanwhile. Without that the last to *finish* wins, and a slow first
  * build can overwrite the state actually asked for.
+ *
+ * `build` gets a `fail` callback to hand the products their `onError`. Their
+ * own build is asynchronous *inside* the constructor, so a genome that will not
+ * resolve never reaches the promise this awaits — without passing it on, that
+ * failure reaches only the console and the cell stays blank.
  */
 export function defineWidget<Traits extends object, C extends Controller>(
-  build: (el: HTMLElement, model: AnyModel<Traits>) => Promise<C>,
+  build: (
+    el: HTMLElement,
+    model: AnyModel<Traits>,
+    fail: (e: unknown) => void,
+  ) => Promise<C>,
   handlers: (
     shell: WidgetShell<C>,
     model: AnyModel<Traits>,
@@ -76,7 +109,13 @@ export function defineWidget<Traits extends object, C extends Controller>(
       teardown()
       clearError(el)
       const token = ++seq
-      build(el, model)
+      const fail = (e: unknown) => {
+        console.error(e)
+        if (token === seq) {
+          showError(el, e)
+        }
+      }
+      build(el, model, fail)
         .then(built => {
           if (token === seq) {
             controller = built
@@ -84,12 +123,7 @@ export function defineWidget<Traits extends object, C extends Controller>(
             built.destroy()
           }
         })
-        .catch((e: unknown) => {
-          console.error(e)
-          if (token === seq) {
-            showError(el, e)
-          }
-        })
+        .catch(fail)
     }
 
     const registered = handlers(
