@@ -31,39 +31,98 @@ LinearGenomeView(assembly="hg38", location="chr1:1,000,000..1,100,000")
 
 ## What it looks like
 
-Every figure below is rendered headless from the built bundle by
-`scripts/screenshot_examples.mjs`, out of the declarative config in
-`scripts/gen_screenshot_specs.py` — so they show what the notebooks actually
-produce, not a mock-up.
+Every figure below is a notebook that was **executed**.
+`python scripts/run_examples.py` runs each `examples/*.ipynb` top-to-bottom in a
+real kernel, reads the widgets off that kernel, and photographs them from the
+built bundle — so a figure is what the notebook produces, not a description of
+it kept alongside. The two with no notebook are marked.
 
 A linear view with a conservation bigWig
-([quickstart notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)):
+([01](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)):
 
-![quickstart: assembly + phyloP bigWig](images/01_quickstart.png)
+![quickstart: an assembly and a phyloP bigWig](images/01_quickstart.png)
 
 A bioframe interval result dropped onto the genome — CpG islands colored by GC%,
 plus their shores
-([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)):
+([02](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)):
 
 ![bioframe result: CpG islands colored by GC%, with their shores](images/02_bioframe.png)
 
-GPU-rendered CRAM alignments over BRCA1, from a hub assembly named by string
-([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)):
+GPU-rendered CRAM alignments, from a hub assembly named by string
+([03](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)):
 
-![NA12878 exome CRAM at BRCA1, coverage plus reads](images/03_alignments.png)
+![NA12878 exome CRAM, coverage plus reads](images/03_alignments.png)
 
 Multi-sample structural variants, one row per sample, colored by cohort
-([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)):
+([04](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/04_multisample_variants.ipynb)):
 
 ![multi-sample SV band display colored by population](images/04_variants.png)
 
-Four E. coli strains compared with an all-vs-all PAF, and the same alignment as
-a dotplot — both from `JBrowseApp`
-([notebook](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/11_synteny_ecoli.ipynb)):
+### Run an analysis, load the result onto the genome
+
+pysam read depth over _BRCA1_, binned and colored by coverage
+([05](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_bam_coverage.ipynb)):
+
+![NA12878 exome depth over BRCA1 from pysam](images/05_bam_coverage.png)
+
+A windowed Fst scan between two _Drosophila_ populations, the sweep landing over
+_Cyp6g1_, with per-population diversity underneath
+([06](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)):
+
+![Fst windows peaking over Cyp6g1, with a two-line diversity wiggle](images/06_popgen_selection.png)
+
+Differential expression, each gene colored by call
+([07](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)):
+
+![genes colored red for up, blue for down](images/07_differential_expression.png)
+
+### Data access, and the loop back to Python
+
+A hosted assembly hub — sequence, aliases, cytobands, gene search — opened at a
+gene by name
+([08](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/08_hosted_assembly_hub.ipynb)):
+
+![hg38 from a hosted hub, opened at BRCA1](images/08_hosted_assembly_hub.png)
+
+An `ipywidgets` slider reclassifying every gene in Python and repainting
+([09](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/09_interactive_controls.ipynb)):
+
+![the DE track at a tightened significance threshold](images/09_interactive_controls.png)
+
+Coverage recomputed in the kernel for the region in view, at a bin size that
+follows the zoom
+([10](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/10_region_reactive.ipynb)):
+
+![depth recomputed for the visible window](images/10_region_reactive.png)
+
+### Comparing genomes
+
+Four E. coli strains tied by one all-vs-all PAF, from `JBrowseApp`
+([11](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/11_synteny_ecoli.ipynb)):
 
 ![synteny: four E. coli strains compared with an all-vs-all PAF](images/11_synteny.png)
 
+The same alignment as a dotplot (no notebook — see 11's closing note):
+
 ![dotplot of K12 vs Sakai from the same PAF](images/12_dotplot.png)
+
+### Scale
+
+Every human RefSeq exon — 2.1M features — written to a tabix file in the kernel
+and read by byte range, no server. Whole-chromosome, which is the notebook's
+point about containers: the bigWig serves a summary from its zoom levels, while
+the tabix track asks you to zoom in, because it has none
+([12](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/12_large_data.ipynb)):
+
+![exon density across chr17 from a bigWig, above a tabix track asking you to zoom in](images/12_large_data.png)
+
+A chromosome of signal, rebinned in Python for whatever is on screen
+([13](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/13_large_wiggle.ipynb)):
+
+![a wiggle recomputed for the visible window](images/13_large_wiggle.png)
+
+A GWAS track drawn as a Manhattan plot by its display has no notebook either; it
+is under [Plots](#plots-gwas-manhattan-and-more), with the config that makes it.
 
 ## Try it in Colab
 
@@ -117,15 +176,25 @@ needs network. `ruff check` and `ruff format` lint the Python, `pnpm format`
 runs prettier over everything else (all three run in CI); the generated
 notebooks and the built bundle are excluded from both.
 
-Regenerating the notebooks and figures needs the extra script dependencies
-(`pip install -e ".[dev,scripts]"`):
+The notebooks and the figures need the extra script dependencies
+(`pip install -e ".[dev,scripts]"`), which are what the notebooks themselves
+import — `run_examples.py` executes them for real:
 
 ```bash
-python scripts/build_examples.py       # rewrite examples/*.ipynb
-python scripts/gen_screenshot_specs.py # -> scripts/screenshot_specs.json
-node scripts/screenshot_examples.mjs   # -> images/*.png (puppeteer, resolved
-                                       #    from the sibling checkout)
+python scripts/build_examples.py    # rewrite examples/*.ipynb from the generator
+python scripts/run_examples.py      # run every notebook, then photograph what
+                                    #   each one built -> images/*.png
+python scripts/run_examples.py 03   # just notebook 03, while iterating
 ```
+
+The whole corpus executes in about 90 seconds — every notebook is network bound
+rather than compute bound — so running them is cheap enough to do on every
+change. It is also the only check that they run at all: `pytest` never opens
+one, so a cell that raises is invisible until a reader hits it in Colab.
+Rendering the figures is the slow half, at roughly half a minute each.
+
+Both need puppeteer, which resolves from the sibling `jbrowse-components`
+checkout.
 
 ## API sketch
 
@@ -377,12 +446,14 @@ Colab renders the widget because each notebook enables the custom widget manager
 
 ## Status
 
-Prototype, bundling the GPU-rendered v4 view. The eleven notebooks in
-`examples/` run top-to-bottom in Colab; their analyses use the tools scientists
-already work in (bioframe intervals, pysam coverage, scipy/statsmodels DE, DEST
-Fst windows) on real data, and their track configs render in a headless browser.
-Two of them close the loop the other way — a slider and a pan in the view drive
-Python to recompute and repaint.
+Prototype, bundling the GPU-rendered v4 view. All thirteen notebooks in
+`examples/` are executed nightly, top-to-bottom, in a real kernel, and every
+figure in this README is photographed from the widget one of them built — so
+"runs in Colab" is a checked claim rather than a hopeful one. Their analyses use
+the tools scientists already work in (bioframe intervals, pysam coverage,
+scipy/statsmodels DE, DEST Fst windows) on real data. Two of them close the loop
+the other way — a slider and a pan in the view drive Python to recompute and
+repaint.
 
 Synteny and dotplot views ship today via `JBrowseApp` (see above), and
 [JBrowseR](https://github.com/GMOD/JBrowseR) wraps the same bundle for R. Next:

@@ -1,6 +1,6 @@
 """The JS side reads config off the anywidget model, so every trait a widget
 declares has to reach it. The screenshot harness fakes that model from
-scripts/gen_screenshot_specs.py, and a trait missing there reads back as
+scripts/run_examples.py, and a trait missing there reads back as
 `undefined` in the bundle — which broke every figure when `plugins` was added.
 These pin the trait sets the bundle indexes into (src/index.ts, src/app.ts).
 """

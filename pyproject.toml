@@ -26,12 +26,22 @@ Issues = "https://github.com/GMOD/jbrowse-anywidget/issues"
 
 [project.optional-dependencies]
 dev = ["pandas", "watchfiles", "pytest", "ruff"]
-# what scripts/ needs on top of dev: nbformat builds examples/; bioframe,
-# pysam and pyBigWig generate the screenshot specs — the local-file figure
-# writes its own tabix BED and bigWig, since writing them from Python is half
-# of what that figure proves. Kept out of dev so the pytest jobs install none
-# of it.
-scripts = ["nbformat", "bioframe", "pysam", "pyBigWig"]
+# What scripts/ needs on top of dev. nbformat builds examples/*.ipynb and
+# nbclient runs them; the rest is what the notebooks themselves import, because
+# run_examples.py executes them for real — that is the point of it. Kept out of
+# dev so the pytest jobs install none of it.
+scripts = [
+  "nbformat",
+  "nbclient",
+  "ipykernel",
+  "ipywidgets",
+  "certifi",
+  "bioframe",
+  "pysam",
+  "pyBigWig",
+  "scipy",
+  "statsmodels",
+]
 
 [tool.ruff]
 # the floor from requires-python, so the linter flags 3.10+ syntax we can't use

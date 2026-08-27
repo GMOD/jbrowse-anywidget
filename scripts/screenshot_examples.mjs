@@ -1,7 +1,7 @@
 // Render the built widget bundles in a headless browser with a fake anywidget
 // model and screenshot them, so the README can show the widget actually working
 // (and so we verify the bundle renders at all). Reads scripts/screenshot_specs.json
-// (from gen_screenshot_specs.py); writes images/<name>.png.
+// (from run_examples.py); writes images/<name>.png.
 //
 // Run:  node scripts/screenshot_examples.mjs [name ...]
 // puppeteer resolves from the sibling jbrowse-components checkout; override with
@@ -132,7 +132,11 @@ async function capture(name, spec) {
       return null
     }
     await waitForReady(page)
-    await page.screenshot({ path: join(REPO, 'images', `${name}.png`) })
+    // The element, not the page: a view's height is its own — one track or six
+    // — so a fixed viewport leaves a band of dead white under the short ones
+    // and crops the tall ones. The widget knows how tall it is.
+    const root = await page.$('#root')
+    await root.screenshot({ path: join(REPO, 'images', `${name}.png`) })
     return errors
   } finally {
     await page.close()

@@ -70,17 +70,48 @@ the stale stamp wins and the track silently stops displaying. There is a test.
 
 **jsdom cannot test the blob path.** Its `Blob.slice()` returns an object with
 no `arrayBuffer()`, so `generic-filehandle2` cannot read from it. The byte-range
-read is covered by `scripts/screenshot_examples.mjs` (`05_local_file`, which
-draws a tabix BED _and_ a bigWig — the bigWig is the strong one, since it can
-only render if the blob is genuinely random-access) and by product-core's
-`localFiles.test.ts`. The `render` workflow is what runs that harness in CI —
-nightly, and by `workflow_dispatch` on demand. It is deliberately not on
-push/PR: it needs real network and links against jbrowse-components `main`, so
-it fails for reasons unrelated to the commit that triggered it. It fails the run
-if any example never paints a canvas, and uploads the images as an artifact
-either way. To run it locally: `python scripts/gen_screenshot_specs.py` (specs
-are gitignored), then
-`PUPPETEER_FROM=<workspace>/jbrowse-components/package.json node scripts/screenshot_examples.mjs`.
+read is covered by notebook 12 — which writes a tabix BED of every human exon
+_and_ a bigWig and hands both over with `add_local_file`; the bigWig is the
+strong one, since it can only render if the blob is genuinely random-access —
+and by product-core's `localFiles.test.ts`. The `render` workflow is what runs
+that in CI, nightly and by `workflow_dispatch` on demand. It is deliberately not
+on push/PR: it needs real network and links against jbrowse-components `main`,
+so it fails for reasons unrelated to the commit that triggered it.
+
+**Figures come from running the notebooks.** `python scripts/run_examples.py`
+executes every `examples/*.ipynb` in a real kernel, in a scratch cwd, then runs
+one more cell in that same kernel that reads the traits off every widget the
+notebook left behind — named, or only displayed, since a notebook ending on a
+bare `JBrowseApp(...)` binds no name and IPython's `Out` is the only place it
+survives. Those become `scripts/screenshot_specs.json` and
+`screenshot_examples.mjs` renders them.
+
+The point is that a figure is the notebook, not a second description of it.
+`gen_screenshot_specs.py` used to rebuild each example's config alongside the
+notebook that showed it, and the two agreed only while someone kept them
+agreeing — the README's claim to show "what the notebooks actually produce"
+rested on that. It is deleted. Two figures have no notebook (`12_dotplot`,
+`13_manhattan`) and are literals in `run_examples.py`; a figure that grows a
+notebook should move out of there into `FIGURES`.
+
+Executing them is also the only check that the notebooks _run_. `pytest` never
+opens one.
+
+Three things that bite:
+
+- **Captured files go to `scripts/captured/`, not `scripts/fixtures/`.**
+  Notebook 13 writes a `signal.bw` of its own and the fixtures directory has a
+  committed one of that name which `verify_bundle_runtime.mjs` reads. Capturing
+  into it silently overwrote the fixture, and the verifier then tested different
+  bytes. `scripts/captured/` is gitignored and cleared per run.
+- **pysam needs a CA bundle pointed out to it.** Its wheels ship their own
+  libcurl with no CA path compiled in, so notebooks 05 and 10 die on an https
+  BAM with `Libcurl reported error 77 (Problem with the SSL CA cert)` — which
+  reads like a bad URL and is not. `run_examples.py` sets `CURL_CA_BUNDLE` and
+  `SSL_CERT_FILE` from certifi when they are unset.
+- **The whole corpus executes in about 90 seconds.** Every notebook is network
+  bound, not compute bound, so this is cheap to run often — which is the point.
+  Rendering is what costs, at roughly half a minute a figure.
 
 **`score` is the magic column.** `add_features` builds a `QuantitativeTrack` — a
 real wiggle with a value axis — only when a column is literally named `score`.
