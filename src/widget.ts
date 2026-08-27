@@ -22,15 +22,16 @@ export function report<T extends Traits, K extends keyof T>(
 }
 
 /**
- * An empty dict is the `session` trait's "unset". Shared by both widgets: a
- * traitlets Dict has no null, so the products' `undefined` — open the declared
- * views/tracks instead — has to be spelled some other way on the wire.
+ * An empty dict is a config trait's "unset". A traitlets Dict has no null, so
+ * the products' `undefined` — open the declared views, take core's own defaults
+ * — has to be spelled some other way on the wire, and an empty dict is it.
  */
-export function sessionOrUndefined<T extends Traits & { session: object }>(
+export function dictOrUndefined<T extends Traits, K extends keyof T>(
   model: AnyModel<T>,
+  trait: K,
 ) {
-  const session = model.get('session')
-  return session && Object.keys(session).length > 0 ? session : undefined
+  const value = model.get(trait)
+  return value && Object.keys(value).length > 0 ? value : undefined
 }
 
 const ERROR_CLASS = 'jbrowse-anywidget-error'

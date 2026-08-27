@@ -11,11 +11,13 @@ import {
   resolveAssemblies,
 } from '@jbrowse/react-app2'
 
+import RpcWorker from '@jbrowse/react-app2/esm/rpcWorker?worker&inline'
+
 import {
   type PluginSpec,
   defineWidget,
   report,
-  sessionOrUndefined,
+  dictOrUndefined,
 } from './widget'
 
 import type { AnyModel } from '@anywidget/types'
@@ -27,6 +29,7 @@ interface JBrowseAppTraits {
   tracks: CreateAppOptions['tracks']
   views: NonNullable<CreateAppOptions['views']>
   plugins: PluginSpec[]
+  configuration: NonNullable<CreateAppOptions['configuration']>
   session: NonNullable<CreateAppOptions['session']>
   local_files: NonNullable<CreateAppOptions['localFiles']>
   view_locations: ViewLocation[]
@@ -55,8 +58,14 @@ async function optionsFromModel(model: Model): Promise<CreateAppOptions> {
     aggregateTextSearchAdapters,
     tracks: model.get('tracks'),
     localFiles: model.get('local_files'),
+    // Data fetching and parsing run off the notebook's UI thread. Without this
+    // the RPC is the main thread, and a deep BAM region blocks the page — the
+    // cell, the scroll, and every other widget on it — for as long as the parse
+    // takes.
+    makeWorkerInstance: () => new RpcWorker(),
     views: model.get('views'),
-    session: sessionOrUndefined(model),
+    session: dictOrUndefined(model, 'session'),
+    configuration: dictOrUndefined(model, 'configuration'),
     plugins: await loadPlugins(model.get('plugins')),
     onLocationChange: locs => {
       report(model, 'view_locations', locs)
@@ -89,10 +98,12 @@ export default {
       'change:tracks': rebuild,
       'change:views': rebuild,
       'change:plugins': rebuild,
+      // the root config is read once, when the engine is created
+      'change:configuration': rebuild,
       // a session is state, not config: swapping it in place keeps the engine
       // (and its resolved assemblies and RPC workers) rather than rebuilding
       'change:session': () => {
-        controller()?.setSession(sessionOrUndefined(model))
+        controller()?.setSession(dictOrUndefined(model, 'session'))
       },
     }),
   ),

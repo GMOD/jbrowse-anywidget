@@ -83,18 +83,19 @@ jobs:
             ${{ github.workspace }}/jbrowse-components/package.json
         run: node scripts/screenshot_examples.mjs
 
-      # The screenshots prove every example still draws; this proves the one
-      # trait handler that is not a one-liner still updates the live browser
-      # instead of rebuilding it. Same requirements as the step above — a real
-      # browser, the built bundle, network — and `if: always()` so a figure that
-      # fails to draw does not also hide whether the diff still works.
-      - name: verify live track updates
+      # The screenshots prove every example still draws; this proves the two
+      # runtime properties a drawn figure does not — that a tracks change
+      # updates the live browser instead of rebuilding it, and that the RPC is
+      # a worker rather than the notebook's UI thread. Same requirements as the
+      # step above — a real browser, the built bundle, network — and
+      # `if: always()` so a figure that fails to draw does not also hide them.
+      - name: verify the bundle's runtime behaviour
         if: always()
         working-directory: jbrowse-anywidget
         env:
           PUPPETEER_FROM:
             ${{ github.workspace }}/jbrowse-components/package.json
-        run: node scripts/verify_track_updates.mjs
+        run: node scripts/verify_bundle_runtime.mjs
 
       # The images are the evidence, so they are worth keeping whichever way it
       # went — on success to eyeball, on failure to see how far it got. They are

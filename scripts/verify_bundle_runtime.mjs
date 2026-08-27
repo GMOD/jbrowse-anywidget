@@ -1,5 +1,7 @@
-// Check that changing the `tracks` trait updates the live browser instead of
-// rebuilding it, against the built bundle in a real browser.
+// The things the built bundle has to do at runtime that nothing else here sees:
+// change tracks without rebuilding the engine, run its RPC in a worker, put the
+// `configuration` trait's theme on the page, and report the live session back to
+// the kernel. All against the real bundle in a real browser.
 //
 // `change:tracks` states the wanted list through the controller's declarative
 // `update()`, which reconciles it against what is open. That matters for a
@@ -7,16 +9,27 @@
 // one, twice per slider step, and rebuilding each time would re-resolve the
 // assembly and start a new RPC worker while the user is still dragging.
 //
-// The assertion is unmount counting. A rebuild tears the React root down, which
-// empties the container element; an update never does. Watching for that is the
-// only signal available from outside the bundle — DOM node identity is not one,
-// because React legitimately replaces nodes when a track list changes.
+// The rebuild assertion is unmount counting. A rebuild tears the React root
+// down, which empties the container element; an update never does. Watching for
+// that is the only signal available from outside the bundle — DOM node identity
+// is not one, because React legitimately replaces nodes when a track list
+// changes.
+//
+// The worker assertion is positive, on the worker's own rpcServer. A worker
+// that fails to boot is loud (its driver's boot promise never settles and every
+// track hangs), but *no worker at all* is silent: drop makeWorkerInstance and
+// every figure still draws, just on the notebook's UI thread.
+//
+// The theme assertion is an A/B on one colour nothing else on the page uses,
+// because `configuration` reaching the engine and its `theme` slot reaching the
+// paint are different claims — a trait that arrives and is ignored looks exactly
+// like a trait that works.
 //
 // Needs network, like every other harness run here: the tracks are the local
 // peaks fixture, but the assembly is the hosted hg38 the screenshot specs use
 // (there is no FASTA fixture in this repo). puppeteer resolves from the sibling
 // jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
-// Run:  node scripts/verify_track_updates.mjs
+// Run:  node scripts/verify_bundle_runtime.mjs
 import { launch, serveRepo } from './browser_harness.mjs'
 
 // The same hosted assembly the screenshot specs use, and the same shorthand a
@@ -108,6 +121,9 @@ try {
       assembly: ASSEMBLY,
       tracks: [track('first', 'First')],
       session: {},
+      // secondary, because that is the slot JBrowse's own header paints with
+      configuration: { theme: { palette: { secondary: { main: '#ff0000' } } } },
+      current_session: {},
       aggregate_text_search_adapters: [],
       local_files: {},
       plugins: [],
@@ -140,6 +156,42 @@ try {
     track('second', 'Second'),
   )
   await page.waitForSelector(trackSelector('second'), { timeout: 60000 })
+
+  // Identified by what it serves, not by being the only worker on the page: with
+  // the RPC on the main thread the parsers spawn their own workers *there*, so
+  // the count is 4 without an RPC worker and 1 with one (those nest inside it
+  // and stop being the page's).
+  const registered = await Promise.all(
+    page
+      .workers()
+      .map(w =>
+        w
+          .evaluate(() => Object.keys(self.rpcServer?.methods ?? {}))
+          .catch(() => []),
+      ),
+  )
+  const rpc = registered.find(methods => methods.includes('CoreGetFeatures'))
+  check(
+    rpc !== undefined,
+    `the RPC runs in a worker (${rpc ? `${rpc.length} methods` : `${registered.length} workers, none serving RPC`})`,
+  )
+
+  const themed = await page.evaluate(() =>
+    [...document.querySelectorAll('*')].some(
+      el => getComputedStyle(el).backgroundColor === 'rgb(255, 0, 0)',
+    ),
+  )
+  check(themed, `the configuration trait's theme reaches the paint`)
+
+  // onSessionChange fires when the layout settles, which the track change above
+  // is. Its shape is what `session=` takes, so this is the round-trip — and it
+  // is `view` singular here, not the app product's `views`, because this is the
+  // one-view product.
+  const saved = await page.evaluate(() => window.__model.get('current_session'))
+  check(
+    saved?.view?.type === 'LinearGenomeView',
+    `the live session reports back (${Object.keys(saved ?? {}).join(', ') || 'nothing'})`,
+  )
 
   const unmounts = await page.evaluate(() => window.__unmounts)
   check(
@@ -186,4 +238,4 @@ if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`)
   process.exit(1)
 }
-console.log('\ntrack updates verified')
+console.log('\nbundle runtime verified')

@@ -17,6 +17,12 @@ The public surface is six names, and each earns its place by that bar:
 | `add_local_file`                  | bytes are not JSON          |
 | `fetch_hub`, `plugin`             | a network fetch is not JSON |
 
+A **trait** is not a helper and does not count against that bar —
+`configuration` is JBrowse's root config block handed straight over, so `theme`,
+`preferences`, `rpc` and `formatDetails` all arrived without a Python name each.
+Adding a trait that passes a config dict through is the shape to reach for;
+adding a function that _shapes_ one is not.
+
 `track`, `view`, `linear_view`, `synteny_view`, `dotplot_view`, `synteny_track`,
 `make_assembly` and `protein_view` were all deleted: each returned a dict
 literal, and each had to grow whenever JBrowse gained a type. If you are about
@@ -121,11 +127,45 @@ resolve never reaches the promise `defineWidget` awaits. `defineWidget` hands
 the reason is console-only. `createApp` is synchronous throughout and needs
 none.
 
-`scripts/verify_track_updates.mjs` covers it in a real browser, on the nightly
+`scripts/verify_bundle_runtime.mjs` covers it in a real browser, on the nightly
 render workflow. Note what it does NOT assert: DOM node identity. React
 legitimately replaces the header's nodes when the track list changes, so an
 identity check reads as a rebuild that never happened — it counts container
 unmounts instead. That cost a debugging round; don't reintroduce it.
+
+## The RPC worker is inlined, and it has to be
+
+The bundles pass `makeWorkerInstance`, so data fetching and parsing run off the
+notebook's UI thread. Three things about how, each of which builds green and
+breaks at runtime if you change it:
+
+- **anywidget hands the page `_esm` as TEXT.** It blobs the string, imports the
+  blob, and revokes the URL. So `import.meta.url` inside our bundle points at
+  nothing, and the products' own `makeWorkerInstance` —
+  `new Worker(new URL('./rpcWorker', import.meta.url))`, the portable spelling
+  and the one to prefer everywhere else — cannot work here. Neither can a worker
+  chunk emitted beside the bundle. Inlining is the only option, and
+  `?worker&inline` is how Vite writes it.
+- **The worker must not code-split.**
+  `worker.rollupOptions.output.inlineDynamicImports` is what forces that.
+  Without it Vite emits a self-contained-looking inline worker that still does
+  `import('./BamAdapter-<hash>.js')` — resolved against the blob URL it was
+  started from, so it 404s at the first BAM read while the build reports
+  success. Checked by reading the emitted worker source, not the exit code: the
+  only dynamic import that may remain is `fetchESM`'s, which takes an absolute
+  plugin URL.
+- **It costs about 2x.** index.js went 7.7 -> 15.4MB (gzip 2.1 -> 4.2), app.js
+  9.2 -> 18.1MB (gzip 2.5 -> 5.0), because the worker's copy of the adapters is
+  a second copy. That is the price of the trade; if it ever has to come back
+  down, the lever is a worker entry narrower than `corePlugins`.
+
+`scripts/verify_bundle_runtime.mjs` pins it, and pins it _positively_ — on the
+worker's own `self.rpcServer` and its `CoreGetFeatures` method. A worker that
+fails to boot is loud (its driver's boot promise never settles and every track
+hangs), but **no worker at all is silent**: drop `makeWorkerInstance` and every
+figure still draws, just on the UI thread. Don't assert a worker _count_ either
+— with the RPC on the main thread the parsers spawn their own workers there, so
+the page has 4 without an RPC worker and 1 with one.
 
 ## The readiness waits live in @jbrowse/capture now
 

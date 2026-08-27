@@ -8,11 +8,13 @@ import {
   loadPlugins,
 } from '@jbrowse/react-linear-genome-view2'
 
+import RpcWorker from '@jbrowse/react-linear-genome-view2/esm/rpcWorker?worker&inline'
+
 import {
   type PluginSpec,
   defineWidget,
   report,
-  sessionOrUndefined,
+  dictOrUndefined,
 } from './widget'
 
 import type { AnyModel } from '@anywidget/types'
@@ -27,10 +29,12 @@ interface LinearGenomeViewTraits {
     CreateLinearGenomeViewOptions['aggregateTextSearchAdapters']
   >
   plugins: PluginSpec[]
+  configuration: NonNullable<CreateLinearGenomeViewOptions['configuration']>
   // name -> bytes; anywidget delivers a Bytes-valued dict as DataViews, which
   // travel as binary buffers rather than JSON
   local_files: NonNullable<CreateLinearGenomeViewOptions['localFiles']>
   location: string
+  current_session: unknown
   selected_feature: unknown
 }
 
@@ -54,8 +58,14 @@ async function optionsFromModel(
     plugins,
     assembly: model.get('assembly'),
     tracks: model.get('tracks'),
-    session: sessionOrUndefined(model),
+    session: dictOrUndefined(model, 'session'),
+    configuration: dictOrUndefined(model, 'configuration'),
     localFiles: model.get('local_files'),
+    // Data fetching and parsing run off the notebook's UI thread. Without this
+    // the RPC is the main thread, and a deep BAM region blocks the page — the
+    // cell, the scroll, and every other widget on it — for as long as the parse
+    // takes.
+    makeWorkerInstance: () => new RpcWorker(),
     location: model.get('location'),
     aggregateTextSearchAdapters: searchAdapters.length
       ? searchAdapters
@@ -69,6 +79,14 @@ async function optionsFromModel(
     },
     onFeatureSelect: feature => {
       report(model, 'selected_feature', feature)
+    },
+    // The other half of `session`, and deliberately a DIFFERENT trait: the
+    // arrangement the user built by hand comes back as the same plain JSON,
+    // ready to hand straight back in. Writing it to `session` itself would echo
+    // (model.set fires change:session here too) and would override a later
+    // change to it.
+    onSessionChange: session => {
+      report(model, 'current_session', session)
     },
   }
 }
@@ -101,6 +119,8 @@ export default {
         'change:assembly': rebuild,
         'change:session': rebuild,
         'change:plugins': rebuild,
+        // the root config is read once, when the engine is created
+        'change:configuration': rebuild,
         'change:tracks': () =>
           // localFiles rides along rather than trusting change:local_files to
           // have run first: a cell that registers a file and opens a track on

@@ -11,6 +11,9 @@ handed straight to the view. `assembly=` also accepts a hub name (``"hg38"``,
 needing aliases is the flat shorthand dict — ``{"name": ..., "uri": ...,
 "refNameAliases": {"uri": ...}}`` — which core expands itself.
 
+Data fetching and parsing run in a web worker, so a deep BAM region does not
+block the notebook's UI thread while it parses.
+
 Python adds only what JSON cannot express itself: an in-memory DataFrame as a
 track (`add_features`), bytes from this kernel as a real file the browser reads
 by byte range (`add_local_file`), and a network fetch (`fetch_hub`, `plugin`).
@@ -141,9 +144,22 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
 
+    # JBrowse's root configuration block, the same one a config.json carries.
+    # `theme` is the reason it is here: a notebook in a dark JupyterLab gets a
+    # light browser otherwise, and there is no other way to reach that slot.
+    #   LinearGenomeView(configuration={"theme": {"palette": {"mode": "dark"}}})
+    configuration = traitlets.Dict().tag(sync=True)
+
     # The visible region, synced both ways. Reading it after the user has panned
     # gives back their current location.
     location = traitlets.Unicode("").tag(sync=True)
+
+    # Read-back only (JS -> Python): the live session, in the shape `session`
+    # accepts, so an arrangement the user built by hand round-trips —
+    # `LinearGenomeView(..., session=saved)` where `saved = view.current_session`.
+    # A separate trait from `session` on purpose: writing the live state back
+    # into the input would echo, and would override a later change to it.
+    current_session = traitlets.Dict().tag(sync=True)
 
     # Read-back only (JS -> Python): the most recently clicked feature, as a
     # plain dict. `None` until the user selects one. Observe it to react to
@@ -159,6 +175,7 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
         tracks: list[TrackEntry] | None = None,
         session: JsonDict | None = None,
         plugins: list[str | JsonDict] | None = None,
+        configuration: JsonDict | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -170,6 +187,8 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
             self.session = session
         if plugins is not None:
             self.plugins = [plugin(p) for p in plugins]
+        if configuration is not None:
+            self.configuration = configuration
         if location:
             self.location = location
 
@@ -312,6 +331,9 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
     views = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
 
+    # JBrowse's root configuration block — see LinearGenomeView.configuration.
+    configuration = traitlets.Dict().tag(sync=True)
+
     # A whole session snapshot to open instead of `views` — the plain JSON
     # JBrowse serializes its own state into, so a layout arranged by hand (or
     # saved from an earlier run) replays exactly. Unlike the config traits above
@@ -350,6 +372,7 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
         views: list[JsonDict] | None = None,
         plugins: list[str | JsonDict] | None = None,
         session: JsonDict | None = None,
+        configuration: JsonDict | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -361,6 +384,8 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
             self.views = list(views)
         if plugins is not None:
             self.plugins = [plugin(p) for p in plugins]
+        if configuration is not None:
+            self.configuration = configuration
         if session is not None:
             self.session = session
 

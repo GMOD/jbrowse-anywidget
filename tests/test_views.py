@@ -65,3 +65,11 @@ def test_jbrowse_app_opens_its_views_when_no_session_is_given():
     # the read-back is a separate trait, so live state never overwrites the
     # session that was handed in
     assert app.current_session == {}
+
+
+def test_the_configuration_block_rides_along():
+    # JBrowse's root config, the same one a config.json carries — `theme` is the
+    # reason it is reachable at all, and there is no Python shape for it
+    theme = {"theme": {"palette": {"secondary": {"main": "#ff0000"}}}}
+    app = JBrowseApp(assemblies=["hg38"], configuration=theme)
+    assert app.configuration == theme

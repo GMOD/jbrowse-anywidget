@@ -1,4 +1,4 @@
-// What screenshot_examples.mjs and verify_track_updates.mjs both need: puppeteer
+// What screenshot_examples.mjs and verify_bundle_runtime.mjs both need: puppeteer
 // out of the sibling jbrowse-components checkout, a static server over this
 // repo, and a browser that renders WebGL with no GPU. Shared because the two
 // copies of it had already drifted — one launched a second identical browser for

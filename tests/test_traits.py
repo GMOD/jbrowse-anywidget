@@ -32,8 +32,10 @@ def test_linear_genome_view_syncs_its_config_traits():
         "session",
         "aggregate_text_search_adapters",
         "plugins",
+        "configuration",
         "local_files",
         "location",
+        "current_session",
         "selected_feature",
     }
 
@@ -44,6 +46,7 @@ def test_jbrowse_app_syncs_its_config_traits():
         "tracks",
         "views",
         "plugins",
+        "configuration",
         "session",
         "local_files",
         "view_locations",
@@ -78,3 +81,17 @@ def test_js_reads_only_traits_python_declares():
         ("app.ts", JBrowseApp()),
     ):
         assert traits_read_by(entrypoint) <= own_traits(widget), entrypoint
+
+
+def test_the_read_back_session_starts_empty_on_both_widgets():
+    # `session` is what you hand in and `current_session` is what comes back;
+    # one trait for both would echo, and would override a later `session=`
+    for widget in (LinearGenomeView(), JBrowseApp()):
+        assert widget.session == {}
+        assert widget.current_session == {}
+
+
+def test_configuration_reaches_both_widgets():
+    theme = {"theme": {"palette": {"secondary": {"main": "#ff0000"}}}}
+    assert LinearGenomeView(configuration=theme).configuration == theme
+    assert JBrowseApp(configuration=theme).configuration == theme

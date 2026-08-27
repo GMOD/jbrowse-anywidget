@@ -1,9 +1,10 @@
 # jbrowse-anywidget
 
 JBrowse 2 linear genome view as an [anywidget](https://anywidget.dev), drawn on
-the GPU (WebGPU, with WebGL and Canvas2D fallbacks). One bundle renders in
-Jupyter, JupyterLab, VS Code, Colab, and marimo, with two-way sync of the
-visible region between Python and the view.
+the GPU (WebGPU, with WebGL and Canvas2D fallbacks) with its data fetching and
+parsing in a web worker. One bundle renders in Jupyter, JupyterLab, VS Code,
+Colab, and marimo, with two-way sync of the visible region between Python and
+the view.
 
 This is the modern replacement for the Dash-based `jbrowse-jupyter` +
 `dash_jbrowse` stack: no Dash server, no `dash-generate-components`, no webpack
@@ -208,6 +209,39 @@ LinearGenomeView(assembly={
     "refNameAliases": {"uri": "https://.../hg19_aliases.txt"},
 })
 ```
+
+## Theme, and the rest of the root config
+
+`configuration=` takes JBrowse's root configuration block — the same one a
+`config.json` carries, so `theme`, `preferences`, `rpc` and `formatDetails` are
+all reachable without a Python name per slot. A notebook in a dark JupyterLab
+wants the first one:
+
+```python
+LinearGenomeView(
+    assembly="hg38",
+    configuration={"theme": {"palette": {"mode": "dark"}}},
+)
+```
+
+JBrowse drops a slot it does not recognise without a word, so a misspelling here
+is a setting that silently never applies — the slot names are in the
+[config guide](https://jbrowse.org/jb2/docs/config_guide/).
+
+## Saving a layout
+
+`view.current_session` is the arrangement the user has built — open tracks,
+where each is looking, per-display settings — as the plain JSON `session=`
+takes, so a layout round-trips:
+
+```python
+saved = view.current_session          # after arranging it by hand
+LinearGenomeView(assembly="hg38", session=saved)
+```
+
+It is a separate trait from `session` on purpose: writing the live state back
+into the input would echo, and would override a later change to it. `JBrowseApp`
+has the same pair, plus `view_locations` for where each of its views is looking.
 
 For human/model-organism data, `fetch_hub("hg38")` (also `hg19`, `mm10`, a
 GenArk `GCA_...`) returns a ready, CORS-enabled assembly config from

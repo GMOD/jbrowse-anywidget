@@ -19,6 +19,17 @@ export default defineConfig({
   // `stream` alias broke, and cost ~1.3MB of shims for one identifier. CI
   // asserts the bundle stays free of unpolyfilled globals.
   define: { 'process.env.NODE_ENV': '"production"' },
+  // The RPC worker is inlined into the bundle as source and started from a blob
+  // URL, because anywidget hands the kernel's `_esm` to the page as *text* and
+  // imports it from a blob it then revokes — so `import.meta.url` here points at
+  // nothing, and a worker chunk emitted beside the bundle is unreachable. That
+  // is also why the worker itself must not code-split: its `import('./chunk')`
+  // would resolve against the same dead blob URL. It builds green either way;
+  // the failure is at the first BAM read.
+  worker: {
+    format: 'es',
+    rollupOptions: { output: { inlineDynamicImports: true } },
+  },
   resolve: {
     // The linked @jbrowse/react-linear-genome-view2 resolves react/mobx from
     // the monorepo's node_modules — a second copy. Dedupe the packages present
