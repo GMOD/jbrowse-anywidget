@@ -161,10 +161,20 @@ breaks at runtime if you change it:
   success. Checked by reading the emitted worker source, not the exit code: the
   only dynamic import that may remain is `fetchESM`'s, which takes an absolute
   plugin URL.
-- **It costs about 2x.** index.js went 7.7 -> 15.4MB (gzip 2.1 -> 4.2), app.js
-  9.2 -> 18.1MB (gzip 2.5 -> 5.0), because the worker's copy of the adapters is
-  a second copy. That is the price of the trade; if it ever has to come back
-  down, the lever is a worker entry narrower than `corePlugins`.
+- **It costs about 2x, and the 2x is per widget.** index.js went 7.7 -> 15.4MB
+  and app.js 9.2 -> 18.1MB, because the worker's copy of the adapters is a
+  second copy. Read that as a download and it sounds like a one-off; it is not.
+  anywidget does `add_traits(_esm=Unicode(...).tag(sync=True))` **per
+  instance**, so the bundle's text crosses the kernel comm once per widget and
+  the browser compiles a copy per widget. Measured on the installed wheel:
+  `get_state()` is 14.9MB of `_esm` + `_css` for one `LinearGenomeView`, so
+  notebook 13's two views are ~30MB, up from ~16MB.
+
+  Still the right trade — a UI frozen for the length of a CRAM parse is worse
+  than a slower first paint, and that paint was already dominated by this. But
+  it is the number to weigh before adding a third view to an example, and the
+  reason a worker entry narrower than `corePlugins` would be worth real effort
+  if this ever has to come down.
 
 **The harness loads the bundle the way anywidget does** — fetch its text, blob
 it, import the blob, revoke. Both `.mjs` scripts used to `import()` it from its
