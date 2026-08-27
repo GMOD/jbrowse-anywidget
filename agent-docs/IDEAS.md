@@ -17,15 +17,19 @@ Worth revisiting if comparative views become a common notebook target. The shape
 is probably:
 
 - make `view_locations` writable, with the JS side navigating each view whose
-  entry changed rather than rebuilding (mirroring how `change:location` calls
-  `setLocation` in `src/index.ts`)
+  entry changed rather than rebuilding (mirroring how `change:location` states
+  `update({location})` in `src/index.ts`)
 - separate the hot path from the cold one, the way the single-view widget
   already does: navigation is live, config changes rebuild
 
-The awkward part is identity — `views` is a positional list, so "which view is
-this locstring for" is only well-defined while the list is unchanged. A view id
-in the `{type, init}` spec would fix that, but it has to agree with whatever
-JBrowse's session spec already does.
+This used to say the awkward part is identity — `views` is positional, so "which
+view is this locstring for" is only well-defined while the list is unchanged,
+and a view id in the spec would have to agree with JBrowse's own. **It already
+does**: `ManagedView` carries an optional `id`, and `viewsToSession` opens each
+view as `view.id ?? 'view-<i>'`, so a spec that names its views has stable ids
+in the live session to navigate by. What is left is the navigation itself —
+`JBrowseAppController` has no per-view door, only `addView`/`removeView`/
+`setSession`, so this reaches through its `viewState` or wants an upstream one.
 
 ## Depend on a published @jbrowse/react-app2 instead of the monorepo link
 
@@ -41,5 +45,15 @@ whichever tree wins, so a published dep has to pin versions that match what the
 embedded product was built against, and the mobx 6-vs-7 break shows how quietly
 that goes wrong.
 
-Not urgent. `bundle`, `typecheck` and `render` all cover the drift this was
-originally about.
+Not urgent — but not for the reason this used to give, which was that `bundle`,
+`typecheck` and `render` cover the drift. They detect it; nobody was reading
+them. Checked 2026-08-26: `render` had been failing at an import since
+2026-08-07 (the day after this repo's previous commit, when the readiness waits
+moved to `@jbrowse/capture`), and `typecheck` since 2026-08-18, when the
+embedded controller's four setters became one `update()` — 19 and 8 nightly runs
+respectively, plus every push in that window, and the widget's track, location
+and local-file handlers were dead at runtime the whole time.
+
+The gap next to this idea is not coverage, then, but notification: three jobs
+reported the break and nothing carried that to anyone. A published dep would not
+change that.
