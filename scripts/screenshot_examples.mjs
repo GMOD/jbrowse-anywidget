@@ -3,50 +3,28 @@
 // (and so we verify the bundle renders at all). Reads scripts/screenshot_specs.json
 // (from gen_screenshot_specs.py); writes images/<name>.png.
 //
-// puppeteer resolves from the sibling jbrowse-components checkout, so run:
-//   node --experimental-vm-modules \
-//     $(cd ../jbrowse-components && pwd)/node_modules/.bin/.. -e ... (see package.json)
-// or simply:  node scripts/screenshot_examples.mjs   (with puppeteer on NODE_PATH)
-import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { mkdir } from 'node:fs/promises'
-import { extname, join } from 'node:path'
-import { createRequire } from 'node:module'
+// Run:  node scripts/screenshot_examples.mjs [name ...]
+// puppeteer resolves from the sibling jbrowse-components checkout; override with
+// PUPPETEER_FROM=/path/to/pkg-dir.
+import { mkdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
-// puppeteer isn't a dep of this repo; resolve it from the sibling
-// jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
-const from =
-  process.env.PUPPETEER_FROM ??
-  new URL('../../jbrowse-components/package.json', import.meta.url).pathname
-const puppeteer = createRequire(from)('puppeteer')
+import { REPO, fromMonorepo, launch, serveRepo } from './browser_harness.mjs'
 
-// readiness waits come from the same checkout's @jbrowse/browser-test-utils, so
-// a capture here uses the identical signals the jbrowse-web browser tests and
-// the website screenshot generator use (display `-done` test-ids, the loading
-// overlay, visible "Loading…" banners) instead of a bespoke sleep
+// readiness waits come from the same checkout's @jbrowse/capture, so a capture
+// here uses the identical signals jb2capture and the website screenshot
+// generator use (per-display paint attributes, the loading overlay, visible
+// "Loading…" banners) instead of a bespoke sleep
 const { waitForDisplaysDone, waitForLoadingComplete, waitForQuiescent } =
-  await import(
-    new URL('packages/browser-test-utils/src/waits.ts', `file://${from}`).href
-  )
+  await import(fromMonorepo('products/jbrowse-capture/src/index.ts'))
 
-const REPO = new URL('..', import.meta.url).pathname
 const specs = JSON.parse(
   await readFile(join(REPO, 'scripts/screenshot_specs.json'), 'utf8'),
 )
 
-const TYPES = {
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.json': 'application/json',
-  '.gz': 'application/octet-stream',
-  '.tbi': 'application/octet-stream',
-  '.bw': 'application/octet-stream',
-}
-
 // A page that imports a built bundle and renders it with a fake anywidget model
 // seeded from window.__traits — the same {get,set,on,off,save_changes} surface
-// src/index.jsx and src/app.jsx use.
+// src/index.ts and src/app.ts read.
 const harness = `<!doctype html><html><head><meta charset="utf8">
 <link rel="stylesheet" href="/jbrowse_anywidget/static/jbrowse-anywidget.css">
 <style>html,body{margin:0}#root{width:1000px}</style></head><body>
@@ -79,52 +57,17 @@ await mod.default.render({ model, el: document.getElementById('root') })
 window.__rendered = true
 </script></body></html>`
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost')
-  if (url.pathname === '/harness.html') {
-    res.setHeader('content-type', 'text/html')
-    res.end(harness)
-  } else {
-    try {
-      const body = await readFile(join(REPO, url.pathname))
-      res.setHeader(
-        'content-type',
-        TYPES[extname(url.pathname)] ?? 'application/octet-stream',
-      )
-      res.end(body)
-    } catch {
-      res.statusCode = 404
-      res.end('not found')
-    }
-  }
-})
-await new Promise(r => server.listen(0, r))
-const port = server.address().port
+const { port, close } = await serveRepo(harness)
 
 await mkdir(join(REPO, 'images'), { recursive: true })
 
-// Headless renders WebGL through swiftshader, which is enough for the genome
-// views but paints nothing for molstar's 3D structure canvas. A spec marked
-// `headed: true` opens a real window on the host GPU instead — so those figures
-// need a desktop session, and every other figure keeps working over SSH/CI.
-const HEADLESS_ARGS = [
-  '--no-sandbox',
-  '--enable-unsafe-swiftshader',
-  '--use-gl=angle',
-  '--use-angle=swiftshader',
-  '--ignore-gpu-blocklist',
-]
-
+// One browser per mode, launched on first use. `headed` is normalized because a
+// spec that never mentions it and one that sets it false are the same request —
+// keyed raw, `undefined` and `false` were two entries and two chromes.
 const browsers = new Map()
-async function browserFor(headed) {
+async function browserFor(headed = false) {
   if (!browsers.has(headed)) {
-    browsers.set(
-      headed,
-      await puppeteer.launch({
-        headless: !headed,
-        args: headed ? ['--no-sandbox'] : HEADLESS_ARGS,
-      }),
-    )
+    browsers.set(headed, await launch(headed))
   }
   return browsers.get(headed)
 }
@@ -211,5 +154,5 @@ for (const [name, spec] of Object.entries(specs)) {
 for (const browser of browsers.values()) {
   await browser.close()
 }
-server.close()
+close()
 process.exit(failed ? 1 : 0)

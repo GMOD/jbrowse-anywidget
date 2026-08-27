@@ -1,16 +1,14 @@
 // Check that changing the `tracks` trait updates the live browser instead of
 // rebuilding it, against the built bundle in a real browser.
 //
-// This is the one trait whose handler is not a one-liner. The controller has no
-// bulk setter for tracks (setTracks was removed upstream — it reconciled a list
-// the user may have opened their own tracks into), so `change:tracks` diffs by
-// trackId and calls addTrack/removeTrack. That exists for a specific loop:
-// 09_interactive_controls sets `view.tracks = []` and then adds one, twice per
-// slider step, and rebuilding each time would re-resolve the assembly and start
-// a new RPC worker while the user is still dragging.
+// `change:tracks` states the wanted list through the controller's declarative
+// `update()`, which reconciles it against what is open. That matters for a
+// specific loop: 09_interactive_controls sets `view.tracks = []` and then adds
+// one, twice per slider step, and rebuilding each time would re-resolve the
+// assembly and start a new RPC worker while the user is still dragging.
 //
 // The assertion is unmount counting. A rebuild tears the React root down, which
-// empties the container element; a diff never does. Watching for that is the
+// empties the container element; an update never does. Watching for that is the
 // only signal available from outside the bundle — DOM node identity is not one,
 // because React legitimately replaces nodes when a track list changes.
 //
@@ -19,26 +17,7 @@
 // (there is no FASTA fixture in this repo). puppeteer resolves from the sibling
 // jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
 // Run:  node scripts/verify_track_updates.mjs
-import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
-import { createRequire } from 'node:module'
-
-const from =
-  process.env.PUPPETEER_FROM ??
-  new URL('../../jbrowse-components/package.json', import.meta.url).pathname
-const puppeteer = createRequire(from)('puppeteer')
-
-const REPO = new URL('..', import.meta.url).pathname
-const TYPES = {
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.json': 'application/json',
-  '.gz': 'application/octet-stream',
-  '.tbi': 'application/octet-stream',
-  '.bw': 'application/octet-stream',
-}
+import { launch, serveRepo } from './browser_harness.mjs'
 
 // The same hosted assembly the screenshot specs use, and the same shorthand a
 // notebook types. The peaks fixture is chr17, so the window below is over it.
@@ -94,40 +73,8 @@ await mod.default.render({ model: window.__model, el: document.getElementById('r
 window.__rendered = true
 </script></body></html>`
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost')
-  if (url.pathname === '/harness.html') {
-    res.setHeader('content-type', 'text/html')
-    res.end(harness)
-    return
-  }
-  try {
-    const body = await readFile(join(REPO, url.pathname))
-    res.setHeader(
-      'content-type',
-      TYPES[extname(url.pathname)] ?? 'application/octet-stream',
-    )
-    res.end(body)
-  } catch {
-    res.statusCode = 404
-    res.end('not found')
-  }
-})
-await new Promise(r => {
-  server.listen(0, r)
-})
-const port = server.address().port
-
-const browser = await puppeteer.launch({
-  headless: true,
-  args: [
-    '--no-sandbox',
-    '--enable-unsafe-swiftshader',
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
-    '--ignore-gpu-blocklist',
-  ],
-})
+const { port, close } = await serveRepo(harness)
+const browser = await launch()
 
 const failures = []
 function check(ok, what) {
@@ -205,8 +152,10 @@ try {
     `the declared set is what is open (${shown.join(', ') || 'nothing'})`,
   )
 
-  // A loose spec has no trackId to diff on, so this one must fall back to a
-  // rebuild rather than silently doing nothing.
+  // A loose spec — a bare data-file uri, no trackId — is applied live too: the
+  // controller expands it through the same guessTrackConf the "Add track" flow
+  // uses, so there is nothing for this side to diff on and nothing to rebuild
+  // for. This is the case the old addTrack/removeTrack diff could not do.
   await page.evaluate(() => {
     window.__model.emit('tracks', [{ uri: '/scripts/fixtures/signal.bw' }])
   })
@@ -214,12 +163,20 @@ try {
     () => !document.querySelector('[data-testid$="-second"]'),
     { timeout: 60000 },
   )
-  const rebuilt = await page.evaluate(() => window.__unmounts)
-  check(rebuilt > 0, `a track list with no trackIds rebuilds instead`)
+  const stillLive = await page.evaluate(() => window.__unmounts)
+  const loose = await shownTracks()
+  check(
+    stillLive === 0,
+    `a loose spec updates live too (${stillLive} unmounts)`,
+  )
+  check(
+    loose.length === 1 && !loose.includes('second'),
+    `the loose spec is the one track open (${loose.join(', ') || 'nothing'})`,
+  )
 } finally {
   await page.close()
   await browser.close()
-  server.close()
+  close()
 }
 
 if (errors.length) {

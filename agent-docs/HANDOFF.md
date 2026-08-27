@@ -84,34 +84,64 @@ real wiggle with a value axis — only when a column is literally named `score`.
 PNGs even with no code change. Don't commit regenerated figures in a change that
 isn't about them; `git checkout images/` after a verification run.
 
-## The controller has no bulk setters any more
+## The controller takes one declarative `update()`
 
-`setAssembly`, `setSession` and `setTracks` were removed from
-`LinearGenomeViewController` upstream (2026-08-06). The first two were `destroy
-and build again` spelled as methods; the third reconciled a track list, which
-had to answer what it does to a track the user opened by hand (it closed it).
+`LinearGenomeViewController` is now `whenReady` / `update(state)` / `destroy`.
+The four setters this repo used to call — `addTrack`, `removeTrack`,
+`setLocation`, `addLocalFiles` — are gone (upstream `0c999fe484`), and before
+that `setAssembly`/`setSession`/`setTracks` went the same way. `update` takes
+`{ tracks?, location?, localFiles? }`: each field you state is the complete
+wanted value, a field you leave out is left alone, and the engine survives.
 
-What that means here: `change:assembly` and `change:session` now call
-the shell's `rebuild`, which is exactly what those setters did internally, so
-nothing changed for a notebook. `change:tracks` is the one that needed work,
-because a notebook drives it in a loop — `09_interactive_controls` sets
-`view.tracks = []` and then adds one, twice per slider step, and a rebuild each
-time would re-resolve the assembly and start a new RPC worker mid-drag. It now
-diffs by trackId and calls `addTrack`/`removeTrack`, falling back to a rebuild
-when any entry is a loose spec (no trackId to diff on). That is also better than
-the setter was: only tracks this widget declared are closed, so one the user
-opened by hand survives a re-run.
+What that means here: `change:assembly`, `change:session` and `change:plugins`
+call the shell's `rebuild` — a different genome is a different browser, and a
+plugin registers types into a live pluginManager. Everything else is one
+`update` call, and **the trackId diff that used to live in `src/index.ts` is
+gone**: no `appliedTracks` WeakMap, no `trackIds`, no rebuild fallback. The
+controller reconciles the wanted list against what is open, `guessTrackConf`
+expands a loose spec on the way, so the loose-spec case that used to force a
+rebuild now updates live like any other.
 
-**`appliedTracks` is a WeakMap keyed by model, not a plain variable**, because
-`defineWidget` takes the build and the handlers once at module scope and calls
-them per rendered widget — a closure variable would be shared by two views in
-one notebook.
+Two things follow that are easy to get wrong:
+
+- **`change:tracks` states `localFiles` too**, rather than trusting
+  `change:local_files` to have run first. A cell that registers a file and opens
+  a track on it changes both traits in one message and the event order is only
+  state-dict key order; `update` registers files before it resolves the tracks
+  that name them.
+- **`optionsFromModel` awaits `loadPlugins` before reading any other trait.** A
+  build waiting on a plugin fetch then opens whatever the kernel set while it
+  waited — which is what lets the handlers drop an `update` that arrives with no
+  controller yet instead of needing a rebuild fallback.
+
+**A build failure needs `onError`.** `createLinearGenomeView` returns
+synchronously and resolves the assembly inside itself, so a genome that will not
+resolve never reaches the promise `defineWidget` awaits. `defineWidget` hands
+`build` a `fail` callback for exactly this; without it the cell stays blank and
+the reason is console-only. `createApp` is synchronous throughout and needs
+none.
 
 `scripts/verify_track_updates.mjs` covers it in a real browser, on the nightly
 render workflow. Note what it does NOT assert: DOM node identity. React
 legitimately replaces the header's nodes when the track list changes, so an
 identity check reads as a rebuild that never happened — it counts container
 unmounts instead. That cost a debugging round; don't reintroduce it.
+
+## The readiness waits live in @jbrowse/capture now
+
+`scripts/screenshot_examples.mjs` imports them from
+`products/jbrowse-capture/src/index.ts`, not the
+`packages/browser-test-utils/src/waits.ts` they used to be at — that path no
+longer exists and the nightly `render` job died at the import with
+`ERR_MODULE_NOT_FOUND`. `scripts/browser_harness.mjs` borrows
+`findChromeExecutable` from the same package, so a box with a system Chrome and
+no `puppeteer browsers install` runs the harness anyway.
+
+`browser_harness.mjs` is where both `.mjs` scripts get puppeteer, the static
+server and the swiftshader launch flags. They had two copies and the copies had
+drifted: the screenshot one keyed its browser cache on the raw `headed` field,
+so a spec that omitted it and a spec that set it `false` were two entries and
+two Chromes.
 
 ## Known broken / unresolved
 
