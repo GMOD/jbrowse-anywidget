@@ -21,11 +21,16 @@ export default defineConfig({
   define: { 'process.env.NODE_ENV': '"production"' },
   // The RPC worker is inlined into the bundle as source and started from a blob
   // URL, because anywidget hands the kernel's `_esm` to the page as *text* and
-  // imports it from a blob it then revokes — so `import.meta.url` here points at
-  // nothing, and a worker chunk emitted beside the bundle is unreachable. That
-  // is also why the worker itself must not code-split: its `import('./chunk')`
-  // would resolve against the same dead blob URL. It builds green either way;
-  // the failure is at the first BAM read.
+  // imports it from a blob. A blob URL is opaque, so `import.meta.url` here
+  // cannot be a base: `new URL('./rpcWorker', import.meta.url)` — the portable
+  // spelling, and the products' own — throws `Invalid URL` outright. (Vite's
+  // non-inline `?worker` doesn't even try that; in lib mode it emits a
+  // root-absolute `/assets/...` path, wrong for a notebook for its own reason.)
+  //
+  // inlineDynamicImports is the other half, and the one that builds green:
+  // without it Vite inlines a worker that still does `import('./chunk')`,
+  // resolved against the blob it was started from, and the failure is a 404 at
+  // the first BAM read rather than anything the build says.
   worker: {
     format: 'es',
     rollupOptions: { output: { inlineDynamicImports: true } },

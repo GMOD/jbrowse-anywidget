@@ -9,7 +9,13 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { REPO, fromMonorepo, launch, serveRepo } from './browser_harness.mjs'
+import {
+  ANYWIDGET_LOADER,
+  REPO,
+  fromMonorepo,
+  launch,
+  serveRepo,
+} from './browser_harness.mjs'
 
 // readiness waits come from the same checkout's @jbrowse/capture, so a capture
 // here uses the identical signals jb2capture and the website screenshot
@@ -30,8 +36,9 @@ const harness = `<!doctype html><html><head><meta charset="utf8">
 <style>html,body{margin:0}#root{width:1000px}</style></head><body>
 <div id="root"></div>
 <script type="module">
+${ANYWIDGET_LOADER}
 const p = new URLSearchParams(location.search)
-const mod = await import('/jbrowse_anywidget/static/' + p.get('bundle'))
+const mod = await loadAsAnywidgetDoes('/jbrowse_anywidget/static/' + p.get('bundle'))
 const store = { ...window.__traits }
 // Kernel-local files reach the widget as binary buffers, which anywidget hands
 // to JS as DataViews. Rebuild that shape by fetching the fixtures, so the

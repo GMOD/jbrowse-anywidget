@@ -29,6 +29,26 @@ const { findChromeExecutable } = await import(
   fromMonorepo('products/jbrowse-capture/src/browser.ts')
 )
 
+/**
+ * Browser-side source both harness pages start with: load a built bundle the
+ * way anywidget delivers one. The kernel sends a `Path` _esm's file TEXT, and
+ * the page blobs it, imports the blob, and revokes the URL — so the module a
+ * notebook runs has an opaque `import.meta.url` and can resolve nothing
+ * relative to itself. Importing it from its own http:// path instead is a
+ * friendlier module than the real one, and the inlined RPC worker's whole
+ * reason for existing would go untested. Interpolate into a page's module
+ * script and call `loadAsAnywidgetDoes(path)`.
+ */
+export const ANYWIDGET_LOADER = `
+async function loadAsAnywidgetDoes(path) {
+  const esm = await (await fetch(path)).text()
+  const url = URL.createObjectURL(new Blob([esm], { type: 'text/javascript' }))
+  const mod = await import(url)
+  URL.revokeObjectURL(url)
+  return mod
+}
+`
+
 export const REPO = new URL('..', import.meta.url).pathname
 
 const TYPES = {

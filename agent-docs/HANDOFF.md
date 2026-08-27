@@ -139,13 +139,20 @@ The bundles pass `makeWorkerInstance`, so data fetching and parsing run off the
 notebook's UI thread. Three things about how, each of which builds green and
 breaks at runtime if you change it:
 
-- **anywidget hands the page `_esm` as TEXT.** It blobs the string, imports the
-  blob, and revokes the URL. So `import.meta.url` inside our bundle points at
-  nothing, and the products' own `makeWorkerInstance` —
-  `new Worker(new URL('./rpcWorker', import.meta.url))`, the portable spelling
-  and the one to prefer everywhere else — cannot work here. Neither can a worker
-  chunk emitted beside the bundle. Inlining is the only option, and
-  `?worker&inline` is how Vite writes it.
+- **anywidget hands the page `_esm` as TEXT.** It blobs the string and imports
+  the blob, so `import.meta.url` inside our bundle is `blob:<origin>/<uuid>` —
+  and a blob URL is **opaque**, so it cannot be a base. Measured in a real
+  browser: `new URL('./rpcWorker.js', import.meta.url)` from inside a blob
+  module throws `Invalid URL`, before and after the URL is revoked. That call is
+  the products' own `makeWorkerInstance` — the portable spelling, and the one to
+  prefer everywhere else — so here it does not merely 404, it throws.
+
+  Vite's non-inline `?worker` fails for a second, independent reason: in lib
+  mode it emits `new Worker("/assets/rpcWorker-<hash>.js", {type:'module'})`, a
+  **root-absolute** path that never involved `import.meta.url` at all. In a
+  notebook that resolves against the Jupyter server's origin, where the widget's
+  static files are not. Both roads are closed; inlining is the only one left.
+
 - **The worker must not code-split.**
   `worker.rollupOptions.output.inlineDynamicImports` is what forces that.
   Without it Vite emits a self-contained-looking inline worker that still does
@@ -158,6 +165,12 @@ breaks at runtime if you change it:
   9.2 -> 18.1MB (gzip 2.5 -> 5.0), because the worker's copy of the adapters is
   a second copy. That is the price of the trade; if it ever has to come back
   down, the lever is a worker entry narrower than `corePlugins`.
+
+**The harness loads the bundle the way anywidget does** — fetch its text, blob
+it, import the blob, revoke. Both `.mjs` scripts used to `import()` it from its
+own `http://` path, which is a friendlier module than a notebook ever gets:
+`import.meta.url` resolves there, so the whole reason the worker is inlined went
+untested. Don't simplify that back.
 
 `scripts/verify_bundle_runtime.mjs` pins it, and pins it _positively_ — on the
 worker's own `self.rpcServer` and its `CoreGetFeatures` method. A worker that

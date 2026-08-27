@@ -30,7 +30,7 @@
 // (there is no FASTA fixture in this repo). puppeteer resolves from the sibling
 // jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
 // Run:  node scripts/verify_bundle_runtime.mjs
-import { launch, serveRepo } from './browser_harness.mjs'
+import { ANYWIDGET_LOADER, launch, serveRepo } from './browser_harness.mjs'
 
 // The same hosted assembly the screenshot specs use, and the same shorthand a
 // notebook types. The peaks fixture is chr17, so the window below is over it.
@@ -65,7 +65,8 @@ window.__unmounts = 0
 new MutationObserver(() => {
   if (!document.getElementById('root').children.length) { window.__unmounts++ }
 }).observe(document.getElementById('root'), { childList: true })
-const mod = await import('/jbrowse_anywidget/static/index.js')
+${ANYWIDGET_LOADER}
+const mod = await loadAsAnywidgetDoes('/jbrowse_anywidget/static/index.js')
 const store = { ...window.__traits }
 const listeners = {}
 window.__model = {
