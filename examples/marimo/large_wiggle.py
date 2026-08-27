@@ -75,14 +75,12 @@ def _(BIN, CHROM, features_track, np, re, signal, starts, view):
         # floor-divided step overshoots
         step = max(BIN, -(-(end - start) // SCREEN_BINS))
         edges = np.arange(start, end, step, dtype=np.int64)
-        idx = np.searchsorted(starts, edges)
+        # the last bin runs to the end of the window, not to its own start
+        idx = np.searchsorted(starts, np.r_[edges, end])
         return (
             step,
             edges,
-            [
-                float(signal[a:b].mean()) if b > a else 0.0
-                for a, b in zip(idx, np.r_[idx[1:], idx[-1]])
-            ],
+            [float(signal[a:b].mean()) if b > a else 0.0 for a, b in zip(idx, idx[1:])],
         )
 
     match = re.match(
