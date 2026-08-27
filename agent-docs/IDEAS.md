@@ -46,14 +46,21 @@ embedded product was built against, and the mobx 6-vs-7 break shows how quietly
 that goes wrong.
 
 Not urgent — but not for the reason this used to give, which was that `bundle`,
-`typecheck` and `render` cover the drift. They detect it; nobody was reading
-them. Checked 2026-08-26: `render` had been failing at an import since
-2026-08-07 (the day after this repo's previous commit, when the readiness waits
-moved to `@jbrowse/capture`), and `typecheck` since 2026-08-18, when the
-embedded controller's four setters became one `update()` — 19 and 8 nightly runs
-respectively, plus every push in that window, and the widget's track, location
-and local-file handlers were dead at runtime the whole time.
+`typecheck` and `render` cover the drift. They detect it. What went wrong by
+2026-08-26 was upstream of that, twice over.
 
-The gap next to this idea is not coverage, then, but notification: three jobs
-reported the break and nothing carried that to anyone. A published dep would not
-change that.
+`origin/main` was four commits behind the maintainer's checkout, so every
+scheduled run for twenty days tested `f7a9c88` — a tree whose `src/index.ts`
+still called `setAssembly`/`setSession`/`setTracks`, dropped upstream on
+2026-08-06. `typecheck` was red from that day, `render` from 2026-08-07 when the
+readiness waits moved to `@jbrowse/capture`. `ffb7006` had fixed the first of
+those on 2026-08-06 itself and was never pushed, so the jobs kept reporting a
+break that was already repaired on a laptop.
+
+Meanwhile the local tree broke on its own: `0c999fe484` turned the remaining
+four setters into one `update()` on 2026-08-18, and the widget's track, location
+and local-file handlers were dead at runtime until 2026-08-26.
+
+So neither gap is coverage. One is that nothing carried three red jobs to
+anyone; the other is that the repo CI tests and the repo the maintainer builds
+were different trees. A published dep would change neither.
