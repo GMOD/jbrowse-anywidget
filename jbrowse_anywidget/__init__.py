@@ -121,7 +121,6 @@ class _LocalFilesMixin(traitlets.HasTraits):
         return name
 
 
-
 class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
     _esm = _STATIC / "index.js"
     _css = _STATIC / "jbrowse-anywidget.css"
@@ -141,7 +140,6 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
     session = traitlets.Dict().tag(sync=True)
     aggregate_text_search_adapters = traitlets.List().tag(sync=True)
     plugins = traitlets.List().tag(sync=True)
-
 
     # The visible region, synced both ways. Reading it after the user has panned
     # gives back their current location.
@@ -191,7 +189,6 @@ class LinearGenomeView(_LocalFilesMixin, anywidget.AnyWidget):
             })
         """
         self.tracks = [*self.tracks, track]
-
 
     def add_features(
         self,
@@ -262,34 +259,43 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
     app engine, so `views=[...]` can mix a `LinearGenomeView`, a
     `LinearSyntenyView`, a `DotplotView`, and more. Each entry is a
     ``{"type", "init"}`` dict — the same vocabulary JBrowse Web serializes into
-    its ``?session=spec-…`` URLs — built most easily with the `linear_view`,
-    `synteny_view`, and `dotplot_view` helpers::
+    its ``?session=spec-…`` URLs, and the same shape a config.json's
+    ``defaultSession.views`` holds::
 
-        view = JBrowseApp(
+        app = JBrowseApp(
             assemblies=[{"name": "hg38", "uri": ...}, {"name": "mm39", "uri": ...}],
-            tracks=[synteny_track("hg38_mm39.paf", "hg38", "mm39")],
-            views=[synteny_view(["hg38", "mm39"], tracks=["hg38_mm39.paf"])],
+            tracks=[{"type": "SyntenyTrack", "trackId": "hg38_mm39", ...}],
+            views=[{
+                "type": "LinearSyntenyView",
+                "init": {
+                    "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+                    "tracks": ["hg38_mm39"],
+                },
+            }],
         )
 
     Unlike `LinearGenomeView`, `tracks` here are full JBrowse track config dicts
-    (a synteny track spans two assemblies, so there's no single-assembly
-    shorthand to infer); `synteny_track` builds the common PAF case. An
-    `assemblies` entry may be a hub name, though::
+    — a synteny track spans two assemblies, so there is no single-assembly
+    shorthand to infer. An `assemblies` entry may be a hub name, though::
 
         JBrowseApp(assemblies=["hg38", "mm39"], views=[...])
 
     `add_local_file` works here too, so a track config can name a file from
-    this kernel instead of a URL.
+    this kernel instead of a URL, and `features_track` builds the config an
+    in-memory DataFrame becomes (this widget has no `add_features` of its own).
 
     `plugins=[...]` loads JBrowse plugins at runtime (see `plugin`), which is
     how view types that don't ship in the bundle — a 3D protein structure, an
-    MSA — become available to `views`. Open those with the generic `view`, whose
-    init fields are the plugin's own::
+    MSA — become available to `views`. A plugin's view is a `{"type", "init"}`
+    dict like any other; the init fields are the plugin's own::
 
         JBrowseApp(
             assemblies=[hg38],
             plugins=["Protein3d"],
-            views=[view("ProteinView", url=".../AF-P04637-F1-model_v6.cif")],
+            views=[{
+                "type": "ProteinView",
+                "init": {"url": ".../AF-P04637-F1-model_v6.cif"},
+            }],
         )
     """
 
@@ -491,12 +497,19 @@ def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:
 
 
 def _json_safe(value: Any) -> Any:
-    # a missing value in a pandas column arrives as float NaN, which json.dumps
-    # writes as bare `NaN` — invalid JSON that the kernel's packer rejects, so
-    # one empty cell would break the whole sync. null is what JSON has instead.
+    # Every cell has to survive json.dumps on the way to the kernel, and a
+    # DataFrame column holds plenty that does not: a NaN is written as bare
+    # `NaN`, invalid JSON the packer rejects; a numpy scalar is neither an int
+    # nor a float; a Timestamp is nothing at all. Any one of those breaks the
+    # *whole* sync, at display time and with an error naming the packer rather
+    # than the column — so coerce here, where the column is still in hand.
+    if hasattr(value, "item") and not isinstance(value, (str, bytes)):
+        value = value.item()  # a numpy scalar to the Python value behind it
     if isinstance(value, float) and not math.isfinite(value):
         return None
-    return value
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    return str(value)
 
 
 def _rows(features: FeatureSource) -> list[JsonDict]:
@@ -506,18 +519,8 @@ def _rows(features: FeatureSource) -> list[JsonDict]:
     return list(features)
 
 
-def _drop_none(blob: JsonDict) -> JsonDict:
-    # a config blob carries only the fields that were set; an absent one is
-    # omitted rather than sent as null, so core's own default applies
-    return {k: v for k, v in blob.items() if v is not None}
-
-
 def _slug(text: str) -> str:
     return "".join(c if c.isalnum() else "-" for c in str(text).lower()).strip("-")
-
-
-def _clean_uri(uri: str) -> str:
-    return re.split(r"[?#]", uri, maxsplit=1)[0]
 
 
 _GENOMES = "https://jbrowse.org"

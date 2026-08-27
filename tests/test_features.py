@@ -45,6 +45,44 @@ def test_non_finite_values_become_null():
     assert "NaN" not in json.dumps(track)
 
 
+def test_numpy_scalars_survive_the_trip():
+    # np.float32 is not a Python float, so the NaN check above misses it and
+    # json.dumps refuses the value outright — one such column would break the
+    # whole sync at display time, nowhere near the add_features call
+    np = pytest.importorskip("numpy")
+    track = features_track(
+        [
+            {
+                "refName": "1",
+                "start": np.int64(0),
+                "end": np.int64(10),
+                "score": np.float32("nan"),
+                "n": np.int32(7),
+            }
+        ]
+    )
+    (feature,) = track["adapter"]["features"]
+    assert feature["score"] is None
+    assert feature["n"] == 7
+    json.dumps(track)
+
+
+def test_a_value_json_cannot_carry_becomes_text():
+    # a datetime column rides along like any other; it must not take the sync
+    # down with it
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame(
+        {
+            "chrom": ["chr1"],
+            "start": [1],
+            "end": [2],
+            "when": [pd.Timestamp("2024-01-01")],
+        }
+    )
+    (feature,) = features_track(df)["adapter"]["features"]
+    assert feature["when"].startswith("2024-01-01")
+
+
 def test_dataframe_is_accepted():
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame({"chrom": ["chr1"], "start": [1], "end": [2], "gc": [0.42]})
