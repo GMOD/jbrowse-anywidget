@@ -61,8 +61,10 @@ def test_traits_are_json_ready_at_defaults():
 
 
 def traits_read_by(entrypoint):
-    # model.get('x') and model.on('change:x') name the traits the bundle indexes
-    source = (SRC / entrypoint).read_text()
+    # model.get('x') and model.on('change:x') name the traits the bundle indexes.
+    # widget.ts counts for both entrypoints: the shell both widgets sit in reads
+    # traits of its own, and a name only it spells would otherwise go unchecked.
+    source = "".join((SRC / name).read_text() for name in (entrypoint, "widget.ts"))
     return set(re.findall(r"model\.get\('([a-z_]+)'\)", source)) | set(
         re.findall(r"'change:([a-z_]+)'", source)
     )
