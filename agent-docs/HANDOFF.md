@@ -113,6 +113,31 @@ Three things that bite:
   bound, not compute bound, so this is cheap to run often — which is the point.
   Rendering is what costs, at roughly half a minute a figure.
 
+**The Manhattan figure is withdrawn, and the example is broken upstream.** The
+GWAS config the README documents renders an axis and no points against
+jbrowse-components HEAD. It drew a full plot on 2026-08-04 from the same config,
+same URL, same location. Checked on 2026-08-26:
+
+- Not this repo's doing: identical with the RPC worker disabled, so it is not
+  the worker and not `makeWorkerInstance`.
+- Not the data: `summary_stats.txt.gz` and its `.tbi` both answer a range
+  request. The 404 in the console is the adapter probing for a `.csi` it then
+  falls back from, which is normal.
+- The display reports `data-display-drawn="true"` and paints its axis, so every
+  readiness signal the harness has says it finished.
+
+`plugins/gwas` has recent work — `54ed8c59a9`, `7d60ceaf6c`, `6bdc3a0af0`, all
+2026-08-26 — and a `ManhattanRPC` of its own; that is where to look. Put the
+figure back in `NO_NOTEBOOK` when it draws.
+
+**A blank-figure check was tried and does not work.** `screenshot_examples.mjs`
+fails a spec that paints no canvas, and deliberately not one that paints an
+empty canvas: a track that fetched nothing still draws its axis, ruler and
+gridlines. Measured against this very case — the empty Manhattan scored 28.1%
+non-background pixels and a _good_ figure, `03_alignments`, scored 14.6%. No
+threshold separates them, and restricting the sample to the lower 55% did not
+either. Whatever catches a figure that lost its data, it is not pixel counting.
+
 **`score` is the magic column.** `add_features` builds a `QuantitativeTrack` — a
 real wiggle with a value axis — only when a column is literally named `score`.
 `depth`/`signal` render as boxes. `quantitative=` overrides.

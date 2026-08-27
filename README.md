@@ -121,9 +121,6 @@ A chromosome of signal, rebinned in Python for whatever is on screen
 
 ![a wiggle recomputed for the visible window](images/13_large_wiggle.png)
 
-A GWAS track drawn as a Manhattan plot by its display has no notebook either; it
-is under [Plots](#plots-gwas-manhattan-and-more), with the config that makes it.
-
 ## Try it in Colab
 
 - Quickstart —
@@ -347,8 +344,6 @@ LinearGenomeView(
     }],
 )
 ```
-
-![GWAS summary statistics drawn as a Manhattan plot across chromosome 2](images/13_manhattan.png)
 
 JBrowse's [config guide](https://jbrowse.org/jb2/docs/config_guide/) and the
 per-type [config docs](https://jbrowse.org/jb2/docs/config/) cover many such

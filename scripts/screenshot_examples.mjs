@@ -94,6 +94,14 @@ async function waitForReady(page) {
 
 // Render one spec in a fresh page and write its figure. Returns the page errors
 // it collected, or null when the widget never painted a canvas at all.
+//
+// NOT "or painted an empty one". A track that fetched nothing still paints its
+// axis, ruler and gridlines, and a blank-picture heuristic was tried and
+// measured against a real case of this (13_manhattan, 2026-08-26): the empty
+// plot scored 28.1% non-background pixels while a *good* figure, 03_alignments,
+// scored 14.6%. There is no threshold between them. Restricting the sample to
+// the lower 55% did not separate them either. Whatever catches a figure that
+// lost its data, it is not pixel counting — don't re-derive this one.
 async function capture(name, spec) {
   const tall = spec.bundle === 'app.js'
   const page = await (await browserFor(spec.headed)).newPage()
