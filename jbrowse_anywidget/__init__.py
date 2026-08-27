@@ -81,6 +81,27 @@ TrackEntry = Union[str, "tuple[str, str]", JsonDict]
 FeatureSource = Union["pd.DataFrame", "Iterable[Mapping[str, Any]]"]
 
 
+def _sync_traits(widget: Any) -> set[str]:
+    """The names of the traits this widget itself syncs to JS.
+
+    Derived rather than listed, in one place, because two things depend on
+    getting it right and a hand-kept list in either goes stale silently: the
+    trait-contract test, and the screenshot harness, which fakes the anywidget
+    model and renders a trait it forgot as `undefined`.
+
+    Scope is our own classes — walk up to, not into, AnyWidget, since
+    ipywidgets' inherited `layout`/`tabbable`/`tooltip` are not ours and not
+    JSON. anywidget subclasses each instance to hold `_esm`/`_css`, hence the
+    underscore filter.
+    """
+    names: set[str] = set()
+    for cls in type(widget).__mro__:
+        if cls is anywidget.AnyWidget:
+            break
+        names |= set(cls.class_own_traits(sync=True))
+    return {name for name in names if not name.startswith("_")}
+
+
 class _LocalFilesMixin(traitlets.HasTraits):
     """Files living in this kernel rather than at a URL, shared by both widgets.
 
@@ -388,6 +409,22 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
             self.configuration = configuration
         if session is not None:
             self.session = session
+
+    @traitlets.validate("tracks")
+    def _refuse_loose_tracks(self, proposal: Any) -> list[JsonDict]:
+        # The app's tracks seed the config catalog, which takes full configs
+        # only — a bare uri reaches it as an entry with no type and no adapter
+        # and simply never displays. LinearGenomeView can expand one because it
+        # has a single assembly to guess against; an app spanning four genomes
+        # has nothing to pick.
+        for item in proposal["value"]:
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"JBrowseApp takes full track config dicts; got {item!r}. "
+                    "The bare-uri shorthand is LinearGenomeView's, where the "
+                    "view's own assembly names what the track belongs to."
+                )
+        return proposal["value"]
 
 
 PLUGIN_STORE = "https://jbrowse.org/plugin-store/plugins.json"

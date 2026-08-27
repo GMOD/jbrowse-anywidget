@@ -14,13 +14,13 @@ import json
 import random
 from pathlib import Path
 
-import anywidget
 import bioframe as bf
 import pandas as pd
 
 from jbrowse_anywidget import (
     JBrowseApp,
     LinearGenomeView,
+    _sync_traits,
 )
 
 # the flat assembly shorthand: core picks the adapter from the extension,
@@ -44,26 +44,14 @@ VOLVOX_DATA = (
 
 
 def traits_of(widget):
-    """Every trait the widget itself syncs to JS, read off the widget.
+    """Every trait the widget itself syncs to JS, with its value.
 
-    Derived rather than listed: the harness fakes the anywidget model, so a
-    trait missing from the spec reads back as `undefined` in the bundle and the
-    render dies — which is exactly what happened when `plugins` was added and
-    the hand-written lists here weren't. Scope is our own classes: walk up to
-    (not into) AnyWidget, since ipywidgets' inherited `layout`/`tabbable`/
-    `tooltip` are not ours and not JSON. anywidget subclasses each instance to
-    hold `_esm`/`_css`, hence the underscore filter.
+    The names come from the package, not a list here: the harness fakes the
+    anywidget model, so a trait missing from the spec reads back as `undefined`
+    in the bundle and the render dies — which is exactly what happened when
+    `plugins` was added and the hand-written lists here weren't.
     """
-    names = set()
-    for cls in type(widget).__mro__:
-        if cls is anywidget.AnyWidget:
-            break
-        names |= set(cls.class_own_traits(sync=True))
-    return {
-        name: getattr(widget, name)
-        for name in sorted(names)
-        if not name.startswith("_")
-    }
+    return {name: getattr(widget, name) for name in sorted(_sync_traits(widget))}
 
 
 FIXTURES = Path("scripts/fixtures")

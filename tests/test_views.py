@@ -67,6 +67,15 @@ def test_jbrowse_app_opens_its_views_when_no_session_is_given():
     assert app.current_session == {}
 
 
+def test_a_bare_uri_track_is_refused_with_the_reason():
+    # the app's tracks seed the config catalog, which takes full configs only;
+    # left alone this is an entry with no type that simply never displays
+    import pytest
+
+    with pytest.raises(ValueError, match="full track config dicts"):
+        JBrowseApp(assemblies=["hg38"], tracks=["https://x.org/r.bam"])
+
+
 def test_the_configuration_block_rides_along():
     # JBrowse's root config, the same one a config.json carries — `theme` is the
     # reason it is reachable at all, and there is no Python shape for it

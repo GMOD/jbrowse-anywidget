@@ -9,20 +9,13 @@ import json
 import re
 from pathlib import Path
 
-import anywidget
-
-from jbrowse_anywidget import JBrowseApp, LinearGenomeView
+from jbrowse_anywidget import JBrowseApp, LinearGenomeView, _sync_traits
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 
-
-def own_traits(widget):
-    names = set()
-    for cls in type(widget).__mro__:
-        if cls is anywidget.AnyWidget:
-            break
-        names |= set(cls.class_own_traits(sync=True))
-    return {n for n in names if not n.startswith("_")}
+# the package's own walk, the same one the screenshot harness derives its fake
+# model from — a second copy here is where the two would drift
+own_traits = _sync_traits
 
 
 def test_linear_genome_view_syncs_its_config_traits():
