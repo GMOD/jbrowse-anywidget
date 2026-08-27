@@ -110,11 +110,11 @@ pip install -e ".[dev]"
 ```
 
 `pnpm dev` rebuilds the bundle on change, and `pnpm typecheck` runs tsc. Then
-open a notebook from `examples/`. `pytest` covers the Python config builders and
-the Python <-> JS trait contract; neither it nor the bundle build needs network.
-`ruff check` and `ruff format` lint the Python, `pnpm format` runs prettier over
-everything else (all three run in CI); the generated notebooks and the built
-bundle are excluded from both.
+open a notebook from `examples/`. `pytest` covers the DataFrame and local-file
+paths and the Python <-> JS trait contract; neither it nor the bundle build
+needs network. `ruff check` and `ruff format` lint the Python, `pnpm format`
+runs prettier over everything else (all three run in CI); the generated
+notebooks and the built bundle are excluded from both.
 
 Regenerating the notebooks and figures needs the extra script dependencies
 (`pip install -e ".[dev,scripts]"`):
@@ -190,10 +190,10 @@ view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':
 That is the whole design. Python adds only what JSON cannot express itself — a
 DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
 network fetch (`fetch_hub`, `plugin`). Everything else is
-`add_track(<config dict>)`, or whole `tracks=[...]` / `session={...}`
-configs on the constructor. Nothing here has to grow when JBrowse gains a track
-type, an adapter, or a display. Tracks are opened in the view automatically;
-removing one from `view.tracks` closes it.
+`add_track(<config dict>)`, or whole `tracks=[...]` / `session={...}` configs on
+the constructor. Nothing here has to grow when JBrowse gains a track type, an
+adapter, or a display. Tracks are opened in the view automatically; removing one
+from `view.tracks` closes it.
 
 For a custom genome, `assembly=` also accepts a bare sequence-file URL
 (`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly
@@ -307,17 +307,22 @@ It loads a separate, larger bundle (the full app), so the single-view
 
 `plugins=[...]` loads JBrowse plugins at runtime by name from the
 [plugin store](https://jbrowse.org/jb2/plugin_store/), which is how view types
-that don't ship in the bundle become available. A plugin's view has its own init
-fields, so open it with the generic `view()` rather than a Python wrapper that
-would fall out of step with the plugin:
+that don't ship in the bundle become available. A plugin's view is a
+`{"type", "init"}` dict like any other — its `init` fields are the plugin's own,
+which is exactly why there is no Python wrapper to fall out of step with it:
 
 ```python
-from jbrowse_anywidget import JBrowseApp, view
+from jbrowse_anywidget import JBrowseApp
 
 JBrowseApp(
     assemblies=[hg38],
     plugins=["Protein3d"],
-    views=[view("ProteinView", url=".../AF-P04637-F1-model_v6.cif", height=600)],
+    views=[
+        {
+            "type": "ProteinView",
+            "init": {"url": ".../AF-P04637-F1-model_v6.cif", "height": 600},
+        }
+    ],
 )
 ```
 

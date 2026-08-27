@@ -83,7 +83,7 @@ save(
             "An assembly is the flat `{name, uri}` shorthand — core picks the adapter "
             "from the extension and derives the index files. This reference names chromosomes `1`, "
             "`2`, … but the UCSC bigWig below uses `chr1`, `chr2`, …; "
-            "`refname_aliases_uri` points at UCSC's alias table so the two line "
+            "`refNameAliases` points at UCSC's alias table so the two line "
             "up. `location` sets the opening region."
         ),
         new_code_cell(
@@ -1131,7 +1131,8 @@ save(
             "        values=signal[i : i + CHUNK].astype(float).tolist(),\n"
             "    )\n"
             "bw.close()\n"
-            'print(f"bigWig: {os.path.getsize("signal.bw") / 1e6:.0f} MB, zoom levels included")'
+            'size = os.path.getsize("signal.bw") / 1e6\n'
+            'print(f"bigWig: {size:.0f} MB, zoom levels included")'
         ),
         new_code_cell(
             'view.add_track(view.add_local_file("signal.bw"))\n'
@@ -1165,11 +1166,12 @@ save(
             "    # ceiling division, so SCREEN_BINS is a ceiling not a target\n"
             "    step = max(BIN, -(-(end - start) // SCREEN_BINS))\n"
             "    edges = np.arange(start, end, step, dtype=np.int64)\n"
-            "    # mean of the underlying bins falling in each screen bin\n"
-            "    idx = np.searchsorted(starts, edges)\n"
+            "    # mean of the underlying bins in each screen bin; the last one runs\n"
+            "    # to the end of the window rather than to its own start\n"
+            "    idx = np.searchsorted(starts, np.r_[edges, end])\n"
             "    values = [\n"
             "        float(signal[a:b].mean()) if b > a else 0.0\n"
-            "        for a, b in zip(idx, np.r_[idx[1:], idx[-1]])\n"
+            "        for a, b in zip(idx, idx[1:])\n"
             "    ]\n"
             "    live.tracks = []  # replace the previous window\n"
             "    live.add_features(\n"
