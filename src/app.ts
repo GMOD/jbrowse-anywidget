@@ -49,14 +49,18 @@ async function optionsFromModel(model: Model): Promise<CreateAppOptions> {
   // `assemblies` takes the same vocabulary the single-view widget's `assembly`
   // does — a hub name ("hg38"), a sequence URI, a hub config, or a full
   // assembly config. resolveAssemblies is the product's own resolution, which
-  // is why the Python side no longer has to fetch a hub itself.
-  const { assemblies, aggregateTextSearchAdapters } = await resolveAssemblies(
-    model.get('assemblies'),
-  )
+  // is why the Python side no longer has to fetch a hub itself. A hub brings a
+  // track catalog and a search index naming hits by those tracks, so the
+  // Python side's own tracks go in and come back merged after the hub's; kept
+  // out, a gene-name `loc` opens a hit track the app has never heard of.
+  const { assemblies, aggregateTextSearchAdapters, tracks } =
+    await resolveAssemblies(model.get('assemblies'), {
+      tracks: model.get('tracks'),
+    })
   return {
     assemblies,
     aggregateTextSearchAdapters,
-    tracks: model.get('tracks'),
+    tracks,
     localFiles: model.get('local_files'),
     // Data fetching and parsing run off the notebook's UI thread. Without this
     // the RPC is the main thread, and a deep BAM region blocks the page — the
