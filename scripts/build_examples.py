@@ -209,7 +209,9 @@ save(
         new_markdown_cell(
             "## Assembly and alignments\n\n"
             "The CRAM's `.crai` index and its reference sequence are resolved "
-            "automatically from the `uri`, so the adapter is just the URL."
+            "automatically from the `uri`, so the adapter is just the URL. The "
+            "reference names chromosomes `1`, `2`, … and the CRAM `chr1`, "
+            "`chr2`, …, so `refNameAliases` maps one onto the other."
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView\n\n"
@@ -217,6 +219,9 @@ save(
             '    "name": "GRCh38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    "aliases": ["hg38"],\n'
+            '    "refNameAliases": {\n'
+            '        "uri": "https://jbrowse.org/genomes/GRCh38/hg38_aliases.txt"\n'
+            "    },\n"
             "}\n\n"
             "cram = (\n"
             '    "https://jbrowse.org/genomes/GRCh38/alignments/NA12878/"\n'
