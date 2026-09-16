@@ -354,10 +354,11 @@ is a track config plus a `displays` choice.
 
 `LinearGenomeView` is one linear view. For comparative genomics, `JBrowseApp`
 drives the full app from a declarative `views=[...]` list — each entry a
-`{"type", "init"}` dict (the same shape as JBrowse Web's
-[`?session=spec-…` URLs](https://jbrowse.org/jb2/docs/urlparams/); the `init`
-fields come from the view's
-[state-model docs](https://jbrowse.org/jb2/docs/models/linearsyntenyview/)):
+`{"type", ...settings}` dict with every setting written beside `type`, the same
+object a config.json `defaultSession.views` entry and JBrowse Web's
+[`?session=spec-…` URLs](https://jbrowse.org/jb2/docs/urlparams/) hold. The
+settings come from the view's
+[state-model docs](https://jbrowse.org/jb2/docs/models/linearsyntenyview/):
 
 ```python
 from jbrowse_anywidget import JBrowseApp
@@ -384,11 +385,9 @@ JBrowseApp(
     views=[
         {
             "type": "LinearSyntenyView",
-            "init": {
-                # a comparative view's panels are {"assembly", "loc"?} per side
-                "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
-                "tracks": ["hg38_mm39"],
-            },
+            # a comparative view's panels are {"assembly", "loc"?} per side
+            "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+            "tracks": ["hg38_mm39"],
         }
     ],
 )
@@ -405,9 +404,9 @@ It loads a separate, larger bundle (the full app), so the single-view
 
 `plugins=[...]` loads JBrowse plugins at runtime by name from the
 [plugin store](https://jbrowse.org/jb2/plugin_store/), which is how view types
-that don't ship in the bundle become available. A plugin's view is a
-`{"type", "init"}` dict like any other — its `init` fields are the plugin's own,
-which is exactly why there is no Python wrapper to fall out of step with it:
+that don't ship in the bundle become available. A plugin's view is a dict like
+any other — its settings are the plugin's own, which is exactly why there is no
+Python wrapper to fall out of step with it:
 
 ```python
 from jbrowse_anywidget import JBrowseApp
@@ -418,7 +417,8 @@ JBrowseApp(
     views=[
         {
             "type": "ProteinView",
-            "init": {"url": ".../AF-P04637-F1-model_v6.cif", "height": 600},
+            "structures": [{"url": ".../AF-P04637-F1-model_v6.cif"}],
+            "height": 600,
         }
     ],
 )

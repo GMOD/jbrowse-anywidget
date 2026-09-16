@@ -1,10 +1,10 @@
 """JBrowseApp opens views declared as plain JBrowse JSON.
 
-A view spec is `{"type", "init"}` — the same vocabulary JBrowse Web serializes
-into its `?session=spec-…` URLs, and the same shape a config.json's
-`defaultSession.views` holds. There are no Python builders for it: writing the
-dict is barely longer than a call would be, and what you write transfers
-straight to a config file or the docs.
+A view spec is `{"type", ...settings}` — the same object a config.json's
+`defaultSession.views` entry and JBrowse Web's `?session=spec-…` URLs hold.
+There are no Python builders for it: writing the dict is barely longer than a
+call would be, and what you write transfers straight to a config file or the
+docs.
 """
 
 from jbrowse_anywidget import JBrowseApp
@@ -24,11 +24,9 @@ PAF = {
 
 SYNTENY_VIEW = {
     "type": "LinearSyntenyView",
-    "init": {
-        # a comparative view's panels are {"assembly", "loc"?} per side
-        "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
-        "tracks": ["hg38_mm39"],
-    },
+    # a comparative view's panels are {"assembly", "loc"?} per side
+    "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+    "tracks": ["hg38_mm39"],
 }
 
 
@@ -48,9 +46,16 @@ def test_any_view_type_opens_with_no_python_change():
     # runtime plugin registers, needs nothing added here
     app = JBrowseApp(
         assemblies=[{"name": "hg38"}],
-        views=[{"type": "CircularView", "init": {"assembly": "hg38"}}],
+        views=[{"type": "CircularView", "assembly": "hg38"}],
     )
     assert app.views[0]["type"] == "CircularView"
+
+
+def test_a_nested_init_warns_and_names_the_flat_shape():
+    import pytest
+
+    with pytest.warns(FutureWarning, match="directly on the view"):
+        JBrowseApp(views=[{"type": "LinearSyntenyView", "init": {"views": []}}])
 
 
 def test_jbrowse_app_carries_a_session_snapshot():

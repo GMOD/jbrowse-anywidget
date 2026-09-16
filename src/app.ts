@@ -40,7 +40,7 @@ interface JBrowseAppTraits {
 type Model = AnyModel<JBrowseAppTraits>
 
 // The widget's traits map straight onto createApp's declarative options:
-// assemblies + tracks are config lists, views is the [{type, init}] list that
+// assemblies + tracks are config lists, views is the [{type, ...settings}] list that
 // reaches synteny/dotplot/circular/etc. Runtime plugins are fetched first, since
 // a view type they register has to exist before `views` opens it — and the
 // records go through whole rather than mapped to `.plugin`, since the definition

@@ -49,6 +49,7 @@ import math
 import re
 import urllib.error
 import urllib.request
+import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -298,19 +299,17 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
     Where `LinearGenomeView` shows a single linear view, this drives the whole
     app engine, so `views=[...]` can mix a `LinearGenomeView`, a
     `LinearSyntenyView`, a `DotplotView`, and more. Each entry is a
-    ``{"type", "init"}`` dict — the same vocabulary JBrowse Web serializes into
-    its ``?session=spec-…`` URLs, and the same shape a config.json's
-    ``defaultSession.views`` holds::
+    ``{"type", ...settings}`` dict with every setting written directly beside
+    ``type`` — the same object a config.json's ``defaultSession.views`` entry
+    and JBrowse Web's ``?session=spec-…`` URLs hold::
 
         app = JBrowseApp(
             assemblies=[{"name": "hg38", "uri": ...}, {"name": "mm39", "uri": ...}],
             tracks=[{"type": "SyntenyTrack", "trackId": "hg38_mm39", ...}],
             views=[{
                 "type": "LinearSyntenyView",
-                "init": {
-                    "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
-                    "tracks": ["hg38_mm39"],
-                },
+                "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
+                "tracks": ["hg38_mm39"],
             }],
         )
 
@@ -326,15 +325,15 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
 
     `plugins=[...]` loads JBrowse plugins at runtime (see `plugin`), which is
     how view types that don't ship in the bundle — a 3D protein structure, an
-    MSA — become available to `views`. A plugin's view is a `{"type", "init"}`
-    dict like any other; the init fields are the plugin's own::
+    MSA — become available to `views`. A plugin's view is a dict like any
+    other; its settings are the plugin's own::
 
         JBrowseApp(
             assemblies=[hg38],
             plugins=["Protein3d"],
             views=[{
                 "type": "ProteinView",
-                "init": {"url": ".../AF-P04637-F1-model_v6.cif"},
+                "structures": [{"url": ".../AF-P04637-F1-model_v6.cif"}],
             }],
         )
     """
@@ -346,7 +345,7 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
     # hub name ("hg38", "GCF_..."), or a sequence-file URL, the same vocabulary
     # LinearGenomeView's `assembly` takes -- the JS side resolves all four, so
     # `fetch_hub` is a convenience here rather than a requirement. `views` is
-    # the [{type, init}] list of views to open. A change to any rebuilds.
+    # the [{type, ...settings}] list of views to open. A change to any rebuilds.
     assemblies = traitlets.List().tag(sync=True)
     tracks = traitlets.List().tag(sync=True)
     views = traitlets.List().tag(sync=True)
@@ -423,6 +422,20 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
                     f"JBrowseApp takes full track config dicts; got {item!r}. "
                     "The bare-uri shorthand is LinearGenomeView's, where the "
                     "view's own assembly names what the track belongs to."
+                )
+        return proposal["value"]
+
+    @traitlets.validate("views")
+    def _warn_nested_init(self, proposal: Any) -> list[JsonDict]:
+        for view in proposal["value"]:
+            if isinstance(view, dict) and "init" in view:
+                warnings.warn(
+                    f'{view.get("type", "a view")} nests its settings under "init", '
+                    "which JBrowse v5 deprecates: write every setting directly on "
+                    'the view, e.g. {"type": "LinearSyntenyView", "views": [...], '
+                    '"tracks": [...]}',
+                    FutureWarning,
+                    stacklevel=2,
                 )
         return proposal["value"]
 
