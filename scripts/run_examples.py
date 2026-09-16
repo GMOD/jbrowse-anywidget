@@ -126,29 +126,31 @@ NO_NOTEBOOK = {
         "bundle": "app.js",
         "caption": "the same PAF as a dotplot",
         "traits": {
-            "assemblies": [
-                {"name": s, "uri": f"{ECOLI}/{s}.fa.gz"} for s in STRAINS[:2]
-            ],
-            "tracks": [
-                {
-                    "type": "SyntenyTrack",
-                    "trackId": "ecoli_ava",
-                    "name": "E. coli all-vs-all (minimap2 PAF)",
-                    "assemblyNames": STRAINS,
-                    "adapter": {
-                        "type": "AllVsAllPAFAdapter",
+            "options": {
+                "assemblies": [
+                    {"name": s, "uri": f"{ECOLI}/{s}.fa.gz"} for s in STRAINS[:2]
+                ],
+                "tracks": [
+                    {
+                        "type": "SyntenyTrack",
+                        "trackId": "ecoli_ava",
+                        "name": "E. coli all-vs-all (minimap2 PAF)",
                         "assemblyNames": STRAINS,
-                        "pafLocation": {"uri": f"{ECOLI}/all_vs_all.paf.gz"},
-                    },
-                }
-            ],
-            "views": [
-                {
-                    "type": "DotplotView",
-                    "views": [{"assembly": s} for s in STRAINS[:2]],
-                    "tracks": ["ecoli_ava"],
-                }
-            ],
+                        "adapter": {
+                            "type": "AllVsAllPAFAdapter",
+                            "assemblyNames": STRAINS,
+                            "pafLocation": {"uri": f"{ECOLI}/all_vs_all.paf.gz"},
+                        },
+                    }
+                ],
+                "views": [
+                    {
+                        "type": "DotplotView",
+                        "views": [{"assembly": s} for s in STRAINS[:2]],
+                        "tracks": ["ecoli_ava"],
+                    }
+                ],
+            },
         },
     },
 }

@@ -1,4 +1,4 @@
-"""Tests for add_features — the DataFrame/rows -> track path.
+"""Tests for features_track — the DataFrame/rows -> track config path.
 
 Everything here has to survive `json.dumps` on the way to the kernel, so the
 value coercion matters as much as the shape of the config.
@@ -8,13 +8,7 @@ import json
 
 import pytest
 
-from jbrowse_anywidget import LinearGenomeView
-
-
-def features_track(rows, **kwargs):
-    view = LinearGenomeView(assembly="hg38")
-    view.add_features(rows, **kwargs)
-    return view.tracks[-1]
+from jbrowse_anywidget import features_track
 
 
 def test_rows_become_a_from_config_feature_track():
@@ -48,7 +42,7 @@ def test_non_finite_values_become_null():
 def test_numpy_scalars_survive_the_trip():
     # np.float32 is not a Python float, so the NaN check above misses it and
     # json.dumps refuses the value outright — one such column would break the
-    # whole sync at display time, nowhere near the add_features call
+    # whole sync at display time, nowhere near the features_track call
     np = pytest.importorskip("numpy")
     track = features_track(
         [
@@ -108,26 +102,6 @@ def test_missing_coordinate_is_reported():
         features_track([{"refName": "chr1", "start": 0}])
 
 
-def test_duplicate_track_id_is_refused():
-    # calling this twice without a name is the easy way to collide, and two
-    # tracks sharing a trackId break the view rather than showing both
-    view = LinearGenomeView(assembly="hg38")
-    rows = [{"refName": "chr1", "start": 0, "end": 1}]
-    view.add_features(rows)
-    with pytest.raises(ValueError, match="already on this view"):
-        view.add_features(rows)
-    view.add_features(rows, name="other")
-    assert [t["trackId"] for t in view.tracks] == ["features", "other"]
-
-
-def test_add_features_works_without_an_assembly():
-    # this used to raise ValueError("no assembly set; pass assembly_name="); the
-    # name was only ever needed to stamp a field the view fills in itself
-    view = LinearGenomeView()
-    view.add_features([{"refName": "chr1", "start": 0, "end": 1}])
-    assert view.tracks[-1]["trackId"] == "features"
-
-
 def test_a_score_column_makes_a_real_wiggle():
     # JBrowse's own name for the plotted value. Without this an in-memory signal
     # renders as boxes you have to color by hand, never a wiggle with an axis.
@@ -153,13 +127,3 @@ def test_color_lands_on_the_display_the_track_type_uses():
     assert wiggle["type"] == "LinearWiggleDisplay"
     boxes = features_track(rows, color="red", quantitative=False)["displays"][0]
     assert boxes["type"] == "LinearBasicDisplay"
-
-
-def test_features_track_is_usable_without_a_widget():
-    # JBrowseApp has no add_features, so the DataFrame path has to exist as a
-    # plain config builder or multi-view apps cannot show an analysis result
-    from jbrowse_anywidget import features_track as build
-
-    conf = build([{"refName": "1", "start": 1, "end": 9}], name="peaks")
-    assert conf["trackId"] == "peaks"
-    assert conf["adapter"]["type"] == "FromConfigAdapter"

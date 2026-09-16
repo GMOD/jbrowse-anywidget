@@ -10,7 +10,7 @@ from this repo, so no local setup is needed).
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)
 - **[02 · bioframe → track](02_dataframe_analysis.ipynb)** — real UCSC CpG
   islands, one bioframe operation (their shores), both on the genome; any
-  bioframe/pandas frame is one `add_features` call away.
+  bioframe/pandas frame is one `features_track` call away.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
 - **[03 · GPU alignments](03_alignments.ipynb)** — a BAM/CRAM pileup on the GPU,
   colored by pair orientation, soft-clips shown.
@@ -22,7 +22,7 @@ from this repo, so no local setup is needed).
 ## Run an analysis, load the result onto the genome
 
 Compute a result with the tools you already use, then load it with
-`add_features` — the core reason to have a genome browser in a notebook.
+`features_track` — the core reason to have a genome browser in a notebook.
 
 - **[05 · Read depth from a BAM (pysam) → view](05_bam_coverage.ipynb)** — real
   1000 Genomes NA12878 exome; pysam counts coverage over _BRCA1_, binned onto
@@ -67,7 +67,7 @@ interaction can **re-run the analysis** and repaint the track live.
 ## Scale
 
 - **[12 · Large results](12_large_data.ipynb)** — every NCBI RefSeq exon in the
-  human genome (2.1M features). Inlined with `add_features` that is ~207 MB of
+  human genome (2.1M features). Inlined with `features_track` that is ~207 MB of
   JSON; written as a tabix file and pushed with `add_local_file` it is 3.9 MB,
   read by byte range, with no web server. Also writes a bigWig.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/12_large_data.ipynb)
@@ -83,9 +83,9 @@ The widget works in [marimo](https://marimo.io) too, via `mo.ui.anywidget`.
 
 - **[Large signal, reactively](marimo/large_wiggle.py)** — the reactive twin
   of 13. In Jupyter, recomputing for the visible region needs
-  `view.observe(handler, "location")`, a callback, and an explicit clear of the
-  previous track. In marimo a cell that _reads_ `view.location` re-runs when it
-  changes, so the same thing is one cell with no wiring at all.
+  `view.observe(handler, "location")` and a callback. In marimo a cell that
+  _reads_ `view.location` re-runs when it changes, so the same thing is one cell
+  with no wiring at all.
 
 ```bash
 marimo edit examples/marimo/large_wiggle.py

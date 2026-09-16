@@ -1,13 +1,14 @@
 // The things the built bundle has to do at runtime that nothing else here sees:
 // change tracks without rebuilding the engine, run its RPC in a worker, put the
-// `configuration` trait's theme on the page, and report the live session back to
+// `configuration` option's theme on the page, and report the live session back to
 // the kernel. All against the real bundle in a real browser.
 //
-// `change:tracks` states the wanted list through the controller's declarative
-// `update()`, which reconciles it against what is open. That matters for a
-// specific loop: 09_interactive_controls sets `view.tracks = []` and then adds
-// one, twice per slider step, and rebuilding each time would re-resolve the
-// assembly and start a new RPC worker while the user is still dragging.
+// A `tracks` or `location` change to the options goes through the controller's
+// declarative `update()`, which reconciles it against what is open. That
+// matters for a specific loop: 09_interactive_controls restates the track list
+// on every slider step, and rebuilding each time would re-resolve the assembly
+// and start a new RPC worker while the user is still dragging. A change to any
+// other option rebuilds, which the last check counts.
 //
 // The rebuild assertion is unmount counting. A rebuild tears the React root
 // down, which empties the container element; an update never does. Watching for
@@ -22,8 +23,8 @@
 //
 // The theme assertion is an A/B on one colour nothing else on the page uses,
 // because `configuration` reaching the engine and its `theme` slot reaching the
-// paint are different claims — a trait that arrives and is ignored looks exactly
-// like a trait that works.
+// paint are different claims — an option that arrives and is ignored looks
+// exactly like one that works.
 //
 // Needs network, like every other harness run here: the tracks are the local
 // peaks fixture, but the assembly is the hosted hg38 the screenshot specs use
@@ -77,7 +78,7 @@ window.__model = {
   off: (event, fn) => {
     listeners[event] = (listeners[event] ?? []).filter(f => f !== fn)
   },
-  // what a kernel-side assignment does: write the trait, then notify
+  // what a kernel-side update does: write the trait, then notify
   emit: (k, v) => {
     store[k] = v
     for (const fn of listeners['change:' + k] ?? []) { fn() }
@@ -119,16 +120,18 @@ try {
       window.__traits = traits
     },
     {
-      assembly: ASSEMBLY,
-      tracks: [track('first', 'First')],
-      session: {},
-      // secondary, because that is the slot JBrowse's own header paints with
-      configuration: { theme: { palette: { secondary: { main: '#ff0000' } } } },
+      options: {
+        assembly: ASSEMBLY,
+        tracks: [track('first', 'First')],
+        // secondary, because that is the slot JBrowse's own header paints with
+        configuration: {
+          theme: { palette: { secondary: { main: '#ff0000' } } },
+        },
+        location: '17:7,600,000..7,601,000',
+      },
       current_session: {},
-      aggregate_text_search_adapters: [],
       local_files: {},
-      plugins: [],
-      location: '17:7,600,000..7,601,000',
+      location: '',
       selected_feature: null,
     },
   )
@@ -146,13 +149,16 @@ try {
     window.__unmounts = 0
   })
 
-  // The 09_interactive_controls sequence: clear, then add the recomputed track.
-  await page.evaluate(() => {
-    window.__model.emit('tracks', [])
-  })
+  // The 09_interactive_controls sequence: restate the list as the recomputed
+  // track, alongside a location change, both of which the controller takes live.
   await page.evaluate(
     t => {
-      window.__model.emit('tracks', [t])
+      const options = window.__model.get('options')
+      window.__model.emit('options', {
+        ...options,
+        tracks: [t],
+        location: '17:7,600,000..7,602,000',
+      })
     },
     track('second', 'Second'),
   )
@@ -182,7 +188,7 @@ try {
       el => getComputedStyle(el).backgroundColor === 'rgb(255, 0, 0)',
     ),
   )
-  check(themed, `the configuration trait's theme reaches the paint`)
+  check(themed, `the configuration option's theme reaches the paint`)
 
   // onSessionChange fires when the layout settles, which the track change above
   // is. Its shape is what `session=` takes, so this is the round-trip — and it
@@ -197,7 +203,7 @@ try {
   const unmounts = await page.evaluate(() => window.__unmounts)
   check(
     unmounts === 0,
-    `the engine survives a tracks change (${unmounts} unmounts)`,
+    `the engine survives a tracks and location change (${unmounts} unmounts)`,
   )
   const shown = await shownTracks()
   check(
@@ -210,7 +216,11 @@ try {
   // uses, so there is nothing for this side to diff on and nothing to rebuild
   // for. This is the case the old addTrack/removeTrack diff could not do.
   await page.evaluate(() => {
-    window.__model.emit('tracks', [{ uri: '/scripts/fixtures/signal.bw' }])
+    const options = window.__model.get('options')
+    window.__model.emit('options', {
+      ...options,
+      tracks: [{ uri: '/scripts/fixtures/signal.bw' }],
+    })
   })
   await page.waitForFunction(
     () => !document.querySelector('[data-testid$="-second"]'),
@@ -226,6 +236,16 @@ try {
     loose.length === 1 && !loose.includes('second'),
     `the loose spec is the one track open (${loose.join(', ') || 'nothing'})`,
   )
+
+  await page.evaluate(() => {
+    const options = window.__model.get('options')
+    window.__model.emit('options', { ...options, configuration: {} })
+  })
+  const rebuilt = await page
+    .waitForFunction(() => window.__unmounts > 0, { timeout: 60000 })
+    .then(() => true)
+    .catch(() => false)
+  check(rebuilt, 'a change to any other option rebuilds')
 } finally {
   await page.close()
   await browser.close()

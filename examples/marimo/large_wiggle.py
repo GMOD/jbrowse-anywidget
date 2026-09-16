@@ -3,9 +3,9 @@
 The reactive twin of examples/13_large_wiggle.ipynb. Same idea — a wiggle is
 only ever drawn at screen resolution, so bin in Python for the window in view
 and the payload stops depending on how much data is underneath — but in marimo
-the wiring disappears: no `observe`, no callback, no manually clearing the
-previous track. A cell that reads `view.location` simply re-runs when it
-changes, because marimo tracks that dependency itself.
+the wiring disappears: no `observe` and no callback. A cell that reads
+`view.location` simply re-runs when it changes, because marimo tracks that
+dependency itself.
 
 Run it:      marimo edit examples/marimo/large_wiggle.py
 Or read it:  marimo export html examples/marimo/large_wiggle.py -o out.html
@@ -66,8 +66,7 @@ def _(LinearGenomeView, mo):
 def _(BIN, CHROM, features_track, np, re, signal, starts, view):
     # THE reactive cell. Reading view.location is the whole subscription — pan or
     # zoom above and this re-runs, rebins, and replaces the track. The Jupyter
-    # version of this needs view.observe(handler, "location"), a callback, and an
-    # explicit `view.tracks = []` to drop the previous window.
+    # version of this needs view.observe(handler, "location") and a callback.
     SCREEN_BINS = 1500
 
     def rebin(start, end):
@@ -91,21 +90,23 @@ def _(BIN, CHROM, features_track, np, re, signal, starts, view):
         step, edges, values = rebin(start, end)
         # a `score` column makes this a QuantitativeTrack: a real wiggle with a
         # value axis, not boxes to color by hand
-        view.widget.tracks = [
-            features_track(
-                [
-                    {
-                        "refName": CHROM,
-                        "start": int(s),
-                        "end": int(s) + step,
-                        "score": round(v, 2),
-                    }
-                    for s, v in zip(edges, values)
-                ],
-                name="signal (recomputed for this view)",
-                track_id="live",
-            )
-        ]
+        view.widget.update(
+            tracks=[
+                features_track(
+                    [
+                        {
+                            "refName": CHROM,
+                            "start": int(s),
+                            "end": int(s) + step,
+                            "score": round(v, 2),
+                        }
+                        for s, v in zip(edges, values)
+                    ],
+                    name="signal (recomputed for this view)",
+                    track_id="live",
+                )
+            ]
+        )
         summary = f"{end - start:,} bp in view -> {len(edges)} bins at {step:,} bp"
     else:
         # a gene name or a whole-chromosome locstring doesn't parse

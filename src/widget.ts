@@ -1,17 +1,11 @@
 import type { AnyModel, Render } from '@anywidget/types'
 
-export interface PluginSpec {
-  name: string
-  url: string
-}
-
 interface Controller {
   destroy: () => void
 }
 
 type Traits = Record<string, any>
 
-/** Push one trait to the kernel. Every JS -> Python read-back is this shape. */
 export function report<T extends Traits, K extends keyof T>(
   model: AnyModel<T>,
   trait: K,
@@ -22,16 +16,16 @@ export function report<T extends Traits, K extends keyof T>(
 }
 
 /**
- * An empty dict is a config trait's "unset". A traitlets Dict has no null, so
- * the products' `undefined` — open the declared views, take core's own defaults
- * — has to be spelled some other way on the wire, and an empty dict is it.
+ * The option keys whose values differ. The kernel sends the whole dict on each
+ * change, freshly parsed, so identity says nothing and JSON equality is the test.
  */
-export function dictOrUndefined<T extends Traits, K extends keyof T>(
-  model: AnyModel<T>,
-  trait: K,
+export function changedKeys(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
 ) {
-  const value = model.get(trait)
-  return value && Object.keys(value).length > 0 ? value : undefined
+  return [...new Set([...Object.keys(previous), ...Object.keys(next)])].filter(
+    key => JSON.stringify(previous[key]) !== JSON.stringify(next[key]),
+  )
 }
 
 const ERROR_CLASS = 'jbrowse-anywidget-error'

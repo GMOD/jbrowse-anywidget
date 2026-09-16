@@ -168,7 +168,8 @@ pip install -e ".[dev]"
 
 `pnpm dev` rebuilds the bundle on change, and `pnpm typecheck` runs tsc. Then
 open a notebook from `examples/`. `pytest` covers the DataFrame and local-file
-paths and the Python <-> JS trait contract; neither it nor the bundle build
+paths, the Python <-> JS trait contract, and every README and notebook snippet
+against the linked products' option interfaces; neither it nor the bundle build
 needs network. `ruff check` and `ruff format` lint the Python, `pnpm format`
 runs prettier over everything else (all three run in CI); the generated
 notebooks and the built bundle are excluded from both.
@@ -193,95 +194,60 @@ Rendering the figures is the slow half, at roughly half a minute each.
 Both need puppeteer, which resolves from the sibling `jbrowse-components`
 checkout.
 
-## API sketch
+## API
 
-A whole view is one declarative call. A `tracks=[...]` entry can be a bare
-data-file URL — its track type and adapter are inferred from the extension — and
-`assembly="hg38"` fetches a hosted genome by name, so nothing but URLs is
-needed:
+A widget's options are the JBrowse product's own, passed through verbatim with
+JBrowse's camelCase keys: `LinearGenomeView(**options)` takes
+[`createLinearGenomeView`](https://github.com/GMOD/jbrowse-components/blob/main/products/jbrowse-react-linear-genome-view/src/createLinearGenomeView.ts)'s
+options and `JBrowseApp(**options)` takes
+[`createApp`](https://github.com/GMOD/jbrowse-components/blob/main/products/jbrowse-react-app/src/createViewStateFromProps.ts)'s.
+This package names none of them, so an option JBrowse adds works here unchanged.
 
 ```python
-from jbrowse_anywidget import LinearGenomeView
+from jbrowse_anywidget import LinearGenomeView, features_track
 
 view = LinearGenomeView(
     assembly="hg38",
     location="10:29,838,565..29,838,850",
     tracks=[
         "https://.../ncbiRefSeq.sort.gff.gz",
-        "https://.../phyloP100way.bw",
-        "https://.../reads.cram",
+        {"uri": "https://.../reads.cram", "name": "Tumor"},
     ],
 )
-view            # display
-view.location   # read back the user's current region
+view                                   # display
+view.update(location="BRCA1")          # merge keys into view.options
+view.update(tracks=[*view.options["tracks"], features_track(df, name="peaks")])
+view.location                          # read back the user's current region
 ```
 
-The track type and adapter are inferred from the file extension by the view
-itself — using JBrowse's own format plugins, the same inference the "Add track"
-flow uses — so there's no extension table in Python to fall behind: `.bam`,
-`.cram`, `.bw`/`.bigwig`, `.bb`/`.bigbed`, `.vcf`(`.gz`),
-`.gff`(`.gz`)/`.gff3`(`.gz`), `.gtf`(`.gz`), `.bed`(`.gz`), `.hic`, and anything
-else a bundled plugin knows. The index defaults to the conventional sibling
-(`.bai`/`.crai`/`.tbi`); when your index lives elsewhere — or is a `.csi` index
-— give a `(url, index)` pair instead of a bare string. `assemblyNames` is filled
-from the view's assembly, so a `tracks=[...]` list needs no per-track
-boilerplate.
+`update` merges its keywords into `view.options`, and the view applies the keys
+that changed: a linear view's `tracks` and `location` in place, an app's
+`session` in place, anything else by rebuilding. `location`, `view_locations`
+(`JBrowseApp`), `current_session` and `selected_feature` are read-backs the view
+writes, separate from the options so live state never overwrites what you asked
+for.
 
-To set a display name, or anything else, hand over a dict instead of the bare
-string. It is merged onto the inferred config, so the adapter, the index
-location and `assemblyNames` still come for free, and anything past the defaults
-— colors, display settings, even a `type` override — is just another key:
+`assembly` takes a hub name (`"hg38"`, a GenArk `GCF_...`), a sequence-file URL,
+or an assembly config. A `tracks` entry is a bare data-file URL, a
+`{"uri", "index"?, ...}` dict, or a full JBrowse track config; the view infers
+the track type and adapter from the extension with JBrowse's own format plugins.
+`assemblyNames` is filled from the view's assembly.
 
-```python
-view.add_track({"uri": "https://.../reads.cram", "name": "Tumor"})
-```
+Python adds only what JSON cannot express:
 
-There is no Python wrapper for this because there is nothing to wrap: it's
-JBrowse's own config. Assemblies, tracks, and sessions are the same
-[JSON-like dicts](https://jbrowse.org/jb2/docs/config_guide/) JBrowse uses
-everywhere, handed straight to the view — so a track type or adapter the
-shorthand doesn't infer is written out in full, exactly as it would appear in a
-config file:
-
-```python
-view.add_track({
-    "type": "AlignmentsTrack", "trackId": "reads", "name": "reads",
-    "assemblyNames": ["hg38"],
-    "adapter": {"type": "CramAdapter", "uri": ".../reads.cram"},
-})
-
-# the one thing JSON can't do: an in-memory DataFrame becomes a track, no file
-view.add_features(df, name="my peaks", color="jexl:get(feature,'score')>0?'red':'blue'")
-```
-
-That is the whole design. Python adds only what JSON cannot express itself — a
-DataFrame (`add_features`), bytes from this kernel (`add_local_file`), and a
-network fetch (`fetch_hub`, `plugin`). Everything else is
-`add_track(<config dict>)`, or whole `tracks=[...]` / `session={...}` configs on
-the constructor. Nothing here has to grow when JBrowse gains a track type, an
-adapter, or a display. Tracks are opened in the view automatically; removing one
-from `view.tracks` closes it.
-
-For a custom genome, `assembly=` also accepts a bare sequence-file URL
-(`assembly=".../genome.fa.gz"`, or a `.2bit`) — the view builds the assembly
-from it, deriving the name from the file. To name it yourself, or to add
-reference-name aliases, write the flat shorthand dict; there is no Python
-builder because core expands this itself:
-
-```python
-LinearGenomeView(assembly={
-    "name": "hg19",
-    "uri": "https://.../hg19.fa.gz",
-    "refNameAliases": {"uri": "https://.../hg19_aliases.txt"},
-})
-```
+- `features_track(df, name=, color=, ...)` turns a DataFrame or a list of dicts
+  into a track config, inlining the rows. A `score` column makes it a wiggle.
+- `view.add_local_file(path)` pushes a file from this kernel into the browser,
+  where it is read by byte range, and returns the name to use as its URL.
+- `fetch_hub("hg38")` fetches a hosted config (a UCSC name, a GenArk accession,
+  or any config.json URL) with its relative URIs stamped to resolve.
 
 ## Theme, and the rest of the root config
 
-`configuration=` takes JBrowse's root configuration block — the same one a
-`config.json` carries, so `theme`, `preferences`, `rpc` and `formatDetails` are
-all reachable without a Python name per slot. A notebook in a dark JupyterLab
-wants the first one:
+The `configuration` option is JBrowse's root configuration block — the same one
+a `config.json` carries, so `theme`, `preferences`, `rpc` and `formatDetails`
+are all reachable without a Python name per slot. A notebook in a dark
+JupyterLab wants the first one:
 
 ```python
 LinearGenomeView(
@@ -297,24 +263,17 @@ is a setting that silently never applies — the slot names are in the
 ## Saving a layout
 
 `view.current_session` is the arrangement the user has built — open tracks,
-where each is looking, per-display settings — as the plain JSON `session=`
-takes, so a layout round-trips:
+where each is looking, per-display settings — as the plain JSON the `session`
+option takes, so a layout round-trips:
 
 ```python
 saved = view.current_session          # after arranging it by hand
 LinearGenomeView(assembly="hg38", session=saved)
 ```
 
-It is a separate trait from `session` on purpose: writing the live state back
-into the input would echo, and would override a later change to it. `JBrowseApp`
-has the same pair, plus `view_locations` for where each of its views is looking.
-
-For human/model-organism data, `fetch_hub("hg38")` (also `hg19`, `mm10`, a
-GenArk `GCA_...`) returns a ready, CORS-enabled assembly config from
-genomes.jbrowse.org — sequence, refName aliases, cytobands, a gene-name search
-index, and a catalog of hosted tracks — as plain JSON you pass in. Because the
-assembly carries refName aliases, your own tracks line up even when they name
-chromosomes differently (`chr17` vs `17`). See
+`fetch_hub("hg38")` returns a hosted config from genomes.jbrowse.org — sequence,
+refName aliases, cytobands, a gene-name search index and a catalog of hosted
+tracks — as plain JSON to pick from. See
 `examples/08_hosted_assembly_hub.ipynb`.
 
 ## Plots (GWAS Manhattan, and more)
@@ -393,36 +352,12 @@ JBrowseApp(
 )
 ```
 
-Longer than a builder call would be, and deliberately so: this is the JBrowse
-vocabulary, so it transfers unchanged to a `config.json`, to the state-model
-docs, and to a `?session=spec-…` URL — and a view type JBrowse gains, or one a
-runtime plugin registers, opens with nothing added to this package. Change
-`"type"` to `"DotplotView"` for the same alignment as a dotplot.
+This is the JBrowse vocabulary, so it transfers unchanged to a `config.json`, to
+the state-model docs, and to a `?session=spec-…` URL. Change `"type"` to
+`"DotplotView"` for the same alignment as a dotplot.
 
 It loads a separate, larger bundle (the full app), so the single-view
 `LinearGenomeView` stays lean.
-
-`plugins=[...]` loads JBrowse plugins at runtime by name from the
-[plugin store](https://jbrowse.org/jb2/plugin_store/), which is how view types
-that don't ship in the bundle become available. A plugin's view is a dict like
-any other — its settings are the plugin's own, which is exactly why there is no
-Python wrapper to fall out of step with it:
-
-```python
-from jbrowse_anywidget import JBrowseApp
-
-JBrowseApp(
-    assemblies=[hg38],
-    plugins=["Protein3d"],
-    views=[
-        {
-            "type": "ProteinView",
-            "structures": [{"url": ".../AF-P04637-F1-model_v6.cif"}],
-            "height": 600,
-        }
-    ],
-)
-```
 
 ## Publishing (to make the Colab links live)
 
@@ -441,11 +376,13 @@ Colab renders the widget because each notebook enables the custom widget manager
 
 ## Status
 
-Prototype, bundling the GPU-rendered v4 view. All thirteen notebooks in
-`examples/` are executed nightly, top-to-bottom, in a real kernel, and every
-figure in this README is photographed from the widget one of them built — so
-"runs in Colab" is a checked claim rather than a hopeful one. Their analyses use
-the tools scientists already work in (bioframe intervals, pysam coverage,
+Prototype, bundling the GPU-rendered v4 view. 0.3.0 replaced the per-option
+constructor parameters, setters and `add_track`/`add_features`/`plugin` with the
+pass-through options and `update` above. All thirteen notebooks in `examples/`
+are executed nightly, top-to-bottom, in a real kernel, and every figure in this
+README is photographed from the widget one of them built — so "runs in Colab" is
+a checked claim rather than a hopeful one. Their analyses use the tools
+scientists already work in (bioframe intervals, pysam coverage,
 scipy/statsmodels DE, DEST Fst windows) on real data. Two of them close the loop
 the other way — a slider and a pan in the view drive Python to recompute and
 repaint.

@@ -1,6 +1,6 @@
 """Tests for pushing real files from the kernel into the browser.
 
-`add_features` inlines every row into the widget state as JSON, which stops
+`features_track` inlines every row into the widget state as JSON, which stops
 scaling somewhere past a few thousand features. `add_local_file` is the other
 path: a real indexed file crosses as binary and is read *by byte range* in the
 browser, so it stays indexed. These cover the Python half — registration and
@@ -65,16 +65,15 @@ def test_registering_a_second_file_keeps_the_first(tmp_path):
 
 
 def test_a_local_file_is_referenced_like_any_url(tmp_path):
-    # the whole point of naming rather than inventing a scheme: the track entry
-    # is the same loose spec a remote file would use, so extension inference and
-    # index-sibling derivation are unchanged
+    # the track entry is the same bare uri a remote file would use, so extension
+    # inference and index-sibling derivation are unchanged
     peaks = tmp_path / "peaks.bed.gz"
     peaks.write_bytes(b"data")
 
     view = LinearGenomeView(assembly="hg38")
-    view.add_track(view.add_local_file(peaks))
+    view.update(tracks=[view.add_local_file(peaks)])
 
-    assert view.tracks == [{"uri": "peaks.bed.gz"}]
+    assert view.options["tracks"] == ["peaks.bed.gz"]
 
 
 def test_missing_file_raises(tmp_path):

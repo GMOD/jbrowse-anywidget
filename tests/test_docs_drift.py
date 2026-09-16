@@ -2,8 +2,12 @@
 
 The README's blocks, the notebooks' code cells and the public docstrings' `::`
 examples are parsed, never run: an import the package no longer exports, a
-keyword a widget or helper no longer takes, and a view nesting its settings
-under `init` each fail here instead of in a reader's notebook.
+keyword a helper no longer takes, an option the JBrowse product does not have,
+and a view nesting its settings under `init` each fail here instead of in a
+reader's notebook.
+
+A widget's keywords are the product's option interface, read from the linked
+jbrowse-components TypeScript; without that checkout the option half is skipped.
 """
 
 import ast
@@ -18,7 +22,28 @@ import pytest
 import jbrowse_anywidget as jb
 
 REPO = Path(__file__).resolve().parent.parent
-WIDGETS = (jb.LinearGenomeView, jb.JBrowseApp)
+PRODUCTS = {
+    "LinearGenomeView": (
+        "react-linear-genome-view2/src/createLinearGenomeView.ts",
+        ("LinearGenomeViewState", "CreateLinearGenomeViewOptions"),
+    ),
+    "JBrowseApp": ("react-app2/src/JBrowse/JBrowse.tsx", ("JBrowseProps",)),
+}
+
+
+def _option_keys(relative, interfaces):
+    path = REPO / "node_modules" / "@jbrowse" / relative
+    if not path.exists():
+        return None
+    source = path.read_text()
+    keys = set()
+    for name in interfaces:
+        body = re.search(rf"export interface {name}\b[^{{]*{{(.*?)\n}}", source, re.S)
+        keys |= set(re.findall(r"(?m)^  (\w+)\??:", body[1]))
+    return keys
+
+
+OPTIONS = {widget: _option_keys(*where) for widget, where in PRODUCTS.items()}
 
 
 def _docstring_examples(obj, label):
@@ -60,15 +85,12 @@ def _keywords():
         obj = getattr(jb, name)
         if inspect.isfunction(obj):
             accepted[name] = set(inspect.signature(obj).parameters)
-    for widget in WIDGETS:
-        accepted[widget.__name__] = set(
-            inspect.signature(widget.__init__).parameters
-        ) | set(widget.class_trait_names())
-        for cls in widget.__mro__:
-            if cls.__module__ == jb.__name__:
-                for attr, member in vars(cls).items():
-                    if not attr.startswith("_") and inspect.isfunction(member):
-                        accepted[attr] = set(inspect.signature(member).parameters)
+    accepted["add_local_file"] = set(
+        inspect.signature(jb.LinearGenomeView.add_local_file).parameters
+    )
+    if all(OPTIONS.values()):
+        accepted.update(OPTIONS)
+        accepted["update"] = set().union(*OPTIONS.values())
     return accepted
 
 
@@ -99,6 +121,12 @@ def _drift(source):
 
 
 SNIPPETS = list(_snippets())
+
+
+@pytest.mark.skipif(not all(OPTIONS.values()), reason="no linked jbrowse-components")
+def test_option_interfaces_are_read():
+    assert {"assembly", "tracks", "location", "session"} <= OPTIONS["LinearGenomeView"]
+    assert {"assemblies", "tracks", "views", "session"} <= OPTIONS["JBrowseApp"]
 
 
 @pytest.mark.parametrize(("where", "source"), SNIPPETS, ids=[w for w, _ in SNIPPETS])

@@ -101,6 +101,8 @@ save(
         ),
         new_markdown_cell(
             "## Add a track\n\n"
+            "The constructor's keywords are JBrowse's own view options, and "
+            "`update` changes any of them later. "
             "A bare data-file URL is a track — its type and adapter are inferred "
             "from the extension, the way [@jbrowse/img](https://jbrowse.org/jb2/docs/jbrowse-img)'s "
             "`--bam`/`--bigwig`/`--cram` flags work for the CLI. To set a display "
@@ -110,19 +112,21 @@ save(
             "setting (color, height, ...) is just another key."
         ),
         new_code_cell(
-            "view.add_track(\n"
-            "    {\n"
-            '        "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
-            '        "name": "phyloP100way",\n'
-            "    }\n"
+            "view.update(\n"
+            "    tracks=[\n"
+            "        {\n"
+            '            "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            '            "name": "phyloP100way",\n'
+            "        }\n"
+            "    ]\n"
             ")"
         ),
         new_markdown_cell(
             "## Drive the view from Python, read it back\n\n"
-            "Setting `location` navigates the view; after panning in the UI, "
-            "reading `location` returns the user's current region (two-way sync)."
+            "`update(location=...)` navigates the view; after panning in the UI, "
+            "`view.location` returns the user's current region."
         ),
-        new_code_cell('view.location = "1:1,000,000..1,050,000"'),
+        new_code_cell('view.update(location="1:1,000,000..1,050,000")'),
         new_code_cell("view.location  # updates as you pan/zoom in the view above"),
     ],
 )
@@ -137,7 +141,7 @@ save(
             + "\n\n[bioframe](https://bioframe.readthedocs.io) is the "
             "pandas-native toolkit for genomic intervals, and a bioframe frame is "
             "just a DataFrame with `chrom`/`start`/`end`. That's exactly what "
-            "`add_features` takes — so any interval analysis you already do in "
+            "`features_track` takes — so any interval analysis you already do in "
             "bioframe is **one call from the genome**, no file written."
         ),
         new_code_cell(install("bioframe")),
@@ -163,23 +167,28 @@ save(
         ),
         new_markdown_cell(
             "## Both on the genome\n\n"
-            "One `add_features` per frame. Islands are colored by GC% — a column "
+            "One `features_track` per frame. Islands are colored by GC% — a column "
             "that rides along and shows in each feature's details; any column "
             "does. This lands on *TP53*."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track\n\n"
             "hg38 = {\n"
             '    "name": "hg38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/hg38.prefix.fa.gz",\n'
             '    "aliases": ["GRCh38"],\n'
             "}\n"
-            'view = LinearGenomeView(assembly=hg38, location="17:7,660,000..7,700,000")\n'
-            "view.add_features(\n"
-            '    islands, name="CpG islands (by GC%)",\n'
-            "    color=\"jexl:get(feature,'perGc') > 65 ? '#00695c' : '#4db6ac'\",\n"
+            "view = LinearGenomeView(\n"
+            "    assembly=hg38,\n"
+            '    location="17:7,660,000..7,700,000",\n'
+            "    tracks=[\n"
+            "        features_track(\n"
+            '            islands, name="CpG islands (by GC%)",\n'
+            "            color=\"jexl:get(feature,'perGc') > 65 ? '#00695c' : '#4db6ac'\",\n"
+            "        ),\n"
+            '        features_track(shores, name="CpG shores", color="#f9a825"),\n'
+            "    ],\n"
             ")\n"
-            'view.add_features(shores, name="CpG shores", color="#f9a825")\n'
             "view"
         ),
     ],
@@ -214,16 +223,17 @@ save(
             '    "NA12878.alt_bwamem_GRCh38DH.20150826.CEU.exome.cram"\n'
             ")\n\n"
             "view = LinearGenomeView(\n"
-            '    assembly=grch38, location="1:100,987,200..100,987,450"\n'
-            ")\n"
-            "view.add_track(\n"
-            "    {\n"
-            '        "type": "AlignmentsTrack",\n'
-            '        "trackId": "na12878-exome",\n'
-            '        "name": "NA12878 exome",\n'
-            '        "assemblyNames": ["GRCh38"],\n'
-            '        "adapter": {"type": "CramAdapter", "uri": cram},\n'
-            "    }\n"
+            "    assembly=grch38,\n"
+            '    location="1:100,987,200..100,987,450",\n'
+            "    tracks=[\n"
+            "        {\n"
+            '            "type": "AlignmentsTrack",\n'
+            '            "trackId": "na12878-exome",\n'
+            '            "name": "NA12878 exome",\n'
+            '            "assemblyNames": ["GRCh38"],\n'
+            '            "adapter": {"type": "CramAdapter", "uri": cram},\n'
+            "        }\n"
+            "    ],\n"
             ")\n"
             "view"
         ),
@@ -231,26 +241,26 @@ save(
             "## Color reads, show soft-clips\n\n"
             "A track config can carry a `displays` entry to preset the "
             "display — here color by pair orientation to surface structural "
-            "signal, and reveal soft-clipped bases."
+            "signal, and reveal soft-clipped bases. `update` states the whole "
+            "track list, so keep the open one by spreading `view.options`."
         ),
         new_code_cell(
-            "view.add_track(\n"
-            "    {\n"
-            '        "type": "AlignmentsTrack",\n'
-            '        "trackId": "na12878-colored",\n'
-            '        "name": "NA12878 (pair orientation)",\n'
-            '        "assemblyNames": ["GRCh38"],\n'
-            '        "adapter": {"type": "CramAdapter", "uri": cram},\n'
-            '        "displays": [\n'
-            "            {\n"
-            '                "type": "LinearAlignmentsDisplay",\n'
-            '                "displayId": "na12878-colored-display",\n'
-            '                "colorBy": {"type": "pairOrientation"},\n'
-            '                "showSoftClipping": True,\n'
-            "            }\n"
-            "        ],\n"
-            "    }\n"
-            ")"
+            "colored = {\n"
+            '    "type": "AlignmentsTrack",\n'
+            '    "trackId": "na12878-colored",\n'
+            '    "name": "NA12878 (pair orientation)",\n'
+            '    "assemblyNames": ["GRCh38"],\n'
+            '    "adapter": {"type": "CramAdapter", "uri": cram},\n'
+            '    "displays": [\n'
+            "        {\n"
+            '            "type": "LinearAlignmentsDisplay",\n'
+            '            "displayId": "na12878-colored-display",\n'
+            '            "colorBy": {"type": "pairOrientation"},\n'
+            '            "showSoftClipping": True,\n'
+            "        }\n"
+            "    ],\n"
+            "}\n"
+            'view.update(tracks=[*view.options["tracks"], colored])'
         ),
     ],
 )
@@ -303,9 +313,10 @@ save(
             "            }\n"
             "        ],\n"
             "    }\n\n"
-            'view = LinearGenomeView(assembly=volvox, location="ctgA:1..50,000")\n'
-            "view.add_track(\n"
-            '    sv_track("sv-band", "multi-sample SV", "LinearMultiSampleVariantDisplay")\n'
+            "view = LinearGenomeView(\n"
+            "    assembly=volvox,\n"
+            '    location="ctgA:1..50,000",\n'
+            '    tracks=[sv_track("sv-band", "multi-sample SV", "LinearMultiSampleVariantDisplay")],\n'
             ")\n"
             "view"
         ),
@@ -316,12 +327,14 @@ save(
             "that scales to hundreds of samples."
         ),
         new_code_cell(
-            'matrix = LinearGenomeView(assembly=volvox, location="ctgA:1..50,000")\n'
-            "matrix.add_track(\n"
-            "    sv_track(\n"
-            '        "sv-matrix", "genotype matrix",\n'
-            '        "LinearMultiSampleVariantMatrixDisplay",\n'
-            "    )\n"
+            "matrix = LinearGenomeView(\n"
+            "    assembly=volvox,\n"
+            '    location="ctgA:1..50,000",\n'
+            "    tracks=[\n"
+            "        sv_track(\n"
+            '            "sv-matrix", "genotype matrix", "LinearMultiSampleVariantMatrixDisplay"\n'
+            "        )\n"
+            "    ],\n"
             ")\n"
             "matrix"
         ),
@@ -336,7 +349,7 @@ save(
             "# Read depth from a BAM, straight from pysam\n\n"
             + badge("05_bam_coverage.ipynb")
             + "\n\n[pysam](https://pysam.readthedocs.io) is how Python reads BAM "
-            "and CRAM. `count_coverage` over a region, bin it, and `add_features` "
+            "and CRAM. `count_coverage` over a region, bin it, and `features_track` "
             "puts it on the genome — no intermediate file, no bigWig conversion. "
             "The data is the real 1000 Genomes **NA12878 exome** (a 17 GB BAM, "
             "but pysam fetches only the index and the region you ask for)."
@@ -376,16 +389,18 @@ save(
             "on the exons — the depth track peaks there and drops between."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
             'hg19 = fetch_hub("hg19")\n'
             "view = LinearGenomeView(\n"
             '    assembly=hg19["assemblies"][0],\n'
-            '    aggregate_text_search_adapters=hg19["aggregateTextSearchAdapters"],\n'
+            '    aggregateTextSearchAdapters=hg19["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
-            ")\n"
-            "view.add_features(\n"
-            '    coverage, name="NA12878 exome depth",\n'
-            "    color=\"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\",\n"
+            "    tracks=[\n"
+            "        features_track(\n"
+            '            coverage, name="NA12878 exome depth",\n'
+            "            color=\"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\",\n"
+            "        )\n"
+            "    ],\n"
             ")\n"
             "view"
         ),
@@ -444,7 +459,7 @@ save(
             "wiggle — cosmopolitan collapses at the sweep while African holds."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
             'BW = "https://jbrowse.org/demos/popgen/dest_cyp6g1_div_%s.bw"\n'
             "div = lambda label, color, pop: {\n"
             '    "type": "BigWigAdapter", "source": label, "color": color,\n'
@@ -453,26 +468,28 @@ save(
             'dm6 = fetch_hub("dm6")\n'
             "view = LinearGenomeView(\n"
             '    assembly=dm6["assemblies"][0],\n'
-            '    aggregate_text_search_adapters=dm6["aggregateTextSearchAdapters"],\n'
+            '    aggregateTextSearchAdapters=dm6["aggregateTextSearchAdapters"],\n'
             '    location="chr2R:11,900,000..12,450,000",  # or a gene name: "Cyp6g1"\n'
+            "    tracks=[\n"
+            "        features_track(\n"
+            "            windows,\n"
+            '            name="Fst (African vs cosmopolitan)",\n'
+            "            color=\"jexl:get(feature,'fst') > 0.25 ? '#d84315' : get(feature,'fst') > 0.12 ? '#f9a825' : '#90a4ae'\",\n"
+            "        ),\n"
+            "        {\n"
+            '            "type": "MultiQuantitativeTrack",\n'
+            '            "trackId": "diversity",\n'
+            '            "name": "Nucleotide diversity (African vs cosmopolitan)",\n'
+            '            "adapter": {"type": "MultiWiggleAdapter", "subadapters": [\n'
+            '                div("African (ancestral)", "#377eb8", "african"),\n'
+            '                div("Cosmopolitan (derived)", "#e41a1c", "cosmopolitan"),\n'
+            "            ]},\n"
+            '            "displays": [{"type": "MultiLinearWiggleDisplay",\n'
+            '                          "displayId": "diversity-d", "defaultRendering": "multiline"}],\n'
+            "        },\n"
+            '        next(t for t in dm6["tracks"] if t["trackId"] == "dm6-ncbiRefSeqCurated"),\n'
+            "    ],\n"
             ")\n"
-            "view.add_features(\n"
-            "    windows,\n"
-            '    name="Fst (African vs cosmopolitan)",\n'
-            "    color=\"jexl:get(feature,'fst') > 0.25 ? '#d84315' : get(feature,'fst') > 0.12 ? '#f9a825' : '#90a4ae'\",\n"
-            ")\n"
-            "view.add_track({\n"
-            '    "type": "MultiQuantitativeTrack",\n'
-            '    "trackId": "diversity",\n'
-            '    "name": "Nucleotide diversity (African vs cosmopolitan)",\n'
-            '    "adapter": {"type": "MultiWiggleAdapter", "subadapters": [\n'
-            '        div("African (ancestral)", "#377eb8", "african"),\n'
-            '        div("Cosmopolitan (derived)", "#e41a1c", "cosmopolitan"),\n'
-            "    ]},\n"
-            '    "displays": [{"type": "MultiLinearWiggleDisplay",\n'
-            '                  "displayId": "diversity-d", "defaultRendering": "multiline"}],\n'
-            "})\n"
-            'view.add_track(next(t for t in dm6["tracks"] if t["trackId"] == "dm6-ncbiRefSeqCurated"))\n'
             "view"
         ),
     ],
@@ -541,17 +558,22 @@ save(
             "in the feature details."
         ),
         new_code_cell(
-            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track\n\n"
             "grch38 = {\n"
             '    "name": "GRCh38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
             '    "aliases": ["hg38"],\n'
             "}\n"
-            'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n'
-            "view.add_features(\n"
-            "    de,\n"
-            '    name="differential expression",\n'
-            "    color=\"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\",\n"
+            "view = LinearGenomeView(\n"
+            "    assembly=grch38,\n"
+            '    location="7:1,000,000..4,300,000",\n'
+            "    tracks=[\n"
+            "        features_track(\n"
+            "            de,\n"
+            '            name="differential expression",\n'
+            "            color=\"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\",\n"
+            "        )\n"
+            "    ],\n"
             ")\n"
             "view"
         ),
@@ -583,7 +605,7 @@ save(
             'hg38 = fetch_hub("hg38")  # sequence + refName aliases + cytobands + search\n\n'
             "view = LinearGenomeView(\n"
             '    assembly=hg38["assemblies"][0],\n'
-            '    aggregate_text_search_adapters=hg38["aggregateTextSearchAdapters"],\n'
+            '    aggregateTextSearchAdapters=hg38["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
             ")\n"
             "view"
@@ -591,13 +613,13 @@ save(
         new_markdown_cell(
             "## Add a hosted track\n\n"
             '`hg38["tracks"]` is a catalog of ready-to-use hosted tracks. Pick '
-            "one by id and hand it to `add_track` — it's just JSON, no special "
+            "one by id and hand it to `update` — it's just JSON, no special "
             "API."
         ),
         new_code_cell(
             'catalog = {t["trackId"]: t for t in hg38["tracks"]}\n'
             'print(len(catalog), "hosted tracks, e.g.:", list(catalog)[:4])\n\n'
-            'view.add_track(catalog["hg38-ncbiRefSeqCurated"])'
+            'view.update(tracks=[catalog["hg38-ncbiRefSeqCurated"]])'
         ),
         new_markdown_cell(
             "## Mix in your own data\n\n"
@@ -607,18 +629,17 @@ save(
             "aliasing."
         ),
         new_code_cell(
-            "view.add_track(\n"
-            "    {\n"
-            '        "type": "QuantitativeTrack",\n'
-            '        "trackId": "phyloP100way",\n'
-            '        "name": "phyloP100way",\n'
-            '        "assemblyNames": ["hg38"],\n'
-            '        "adapter": {\n'
-            '            "type": "BigWigAdapter",\n'
-            '            "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
-            "        },\n"
-            "    }\n"
-            ")"
+            "phylop = {\n"
+            '    "type": "QuantitativeTrack",\n'
+            '    "trackId": "phyloP100way",\n'
+            '    "name": "phyloP100way",\n'
+            '    "assemblyNames": ["hg38"],\n'
+            '    "adapter": {\n'
+            '        "type": "BigWigAdapter",\n'
+            '        "uri": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",\n'
+            "    },\n"
+            "}\n"
+            'view.update(tracks=[*view.options["tracks"], phylop])'
         ),
     ],
 )
@@ -686,15 +707,15 @@ save(
         ),
         new_markdown_cell(
             "## Wire a slider to the view\n\n"
-            "`render` reruns `classify` at the slider's cutoff and replaces the "
-            "track (clearing first, so moving the slider repaints in place rather "
-            "than stacking tracks). `slider.observe` calls it on every change — "
+            "`render` reruns `classify` at the slider's cutoff and states the "
+            "track list as just that track, so moving the slider repaints in "
+            "place rather than stacking tracks. `slider.observe` calls it on every change — "
             "including a programmatic one, which is how this runs headless below. "
             "Drag the slider and the genes recolor live."
         ),
         new_code_cell(
             "import ipywidgets as widgets\n\n"
-            "from jbrowse_anywidget import LinearGenomeView\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track\n\n"
             "grch38 = {\n"
             '    "name": "GRCh38",\n'
             '    "uri": "https://jbrowse.org/genomes/GRCh38/fasta/GRCh38.fa.gz",\n'
@@ -703,12 +724,15 @@ save(
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
             "COLOR = \"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\"\n\n\n"
             "def render(pvalue_cutoff):\n"
-            "    view.tracks = []  # replace, don't stack\n"
-            "    view.add_features(\n"
-            "        classify(pvalue_cutoff),\n"
-            '        name=f"DE (p < {pvalue_cutoff:g})",\n'
-            '        track_id="de",\n'
-            "        color=COLOR,\n"
+            "    view.update(\n"
+            "        tracks=[\n"
+            "            features_track(\n"
+            "                classify(pvalue_cutoff),\n"
+            '                name=f"DE (p < {pvalue_cutoff:g})",\n'
+            '                track_id="de",\n'
+            "                color=COLOR,\n"
+            "            )\n"
+            "        ]\n"
             "    )\n\n\n"
             "slider = widgets.FloatLogSlider(\n"
             '    value=0.01, base=10, min=-4, max=-1, step=0.2, description="p <",\n'
@@ -776,13 +800,13 @@ save(
             "## Recompute on every pan\n\n"
             "`on_location` parses the view's locstring and re-renders coverage for "
             'that window. `view.observe(..., "location")` fires it whenever the '
-            "region changes — dragging in the UI or setting `view.location` from "
-            "code. A gene-name or whole-chromosome location doesn't parse, and a "
+            "view reports a new region — after a drag in the UI, or after "
+            "`view.update(location=...)` lands. A gene-name or whole-chromosome location doesn't parse, and a "
             "window wider than 5 Mb is skipped to keep each per-pan query snappy."
         ),
         new_code_cell(
             "import re\n\n"
-            "from jbrowse_anywidget import LinearGenomeView, fetch_hub\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
             'hg19 = fetch_hub("hg19")\n'
             "COLOR = \"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\"\n\n\n"
             "def parse_loc(loc):\n"
@@ -790,12 +814,15 @@ save(
             '    return (m[1], int(m[2].replace(",", "")), int(m[3].replace(",", ""))) if m else None\n\n\n'
             "def render_region(chrom, start, end):\n"
             "    if end - start <= 5_000_000:\n"
-            "        view.tracks = []  # replace with the freshly computed window\n"
-            "        view.add_features(\n"
-            "            coverage(chrom, start, end),\n"
-            '            name="NA12878 exome depth (visible region)",\n'
-            '            track_id="depth",\n'
-            "            color=COLOR,\n"
+            "        view.update(\n"
+            "            tracks=[\n"
+            "                features_track(\n"
+            "                    coverage(chrom, start, end),\n"
+            '                    name="NA12878 exome depth (visible region)",\n'
+            '                    track_id="depth",\n'
+            "                    color=COLOR,\n"
+            "                )\n"
+            "            ]\n"
             "        )\n\n\n"
             "def on_location(change):\n"
             '    region = parse_loc(change["new"])\n'
@@ -803,20 +830,23 @@ save(
             "        render_region(*region)\n\n\n"
             "view = LinearGenomeView(\n"
             '    assembly=hg19["assemblies"][0],\n'
-            '    aggregate_text_search_adapters=hg19["aggregateTextSearchAdapters"],\n'
+            '    aggregateTextSearchAdapters=hg19["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
             ")\n"
             'view.observe(on_location, "location")\n'
             "view  # pan or zoom — the depth track recomputes for the new window"
         ),
         new_markdown_cell(
-            "Driving `location` from code fires the same observer, so the track "
-            "recomputes for the new window. Zooming out widens the bins; zooming "
-            "in sharpens them — the resolution follows the view:"
+            "Navigating from code goes through the view too: the observer fires "
+            "once the view reports the region back. Computing the window before "
+            "`update` has the track ready as it lands. Zooming out widens the "
+            "bins; zooming in sharpens them — the resolution follows the view:"
         ),
         new_code_cell(
-            'view.location = "chr17:7,560,000..7,595,000"  # jump to TP53\n'
-            'len(view.tracks[0]["adapter"]["features"]), "bins computed for this window"'
+            'TP53 = "chr17:7,560,000..7,595,000"\n'
+            "render_region(*parse_loc(TP53))\n"
+            "view.update(location=TP53)\n"
+            'len(view.options["tracks"][0]["adapter"]["features"]), "bins computed for this window"'
         ),
     ],
 )
@@ -897,7 +927,7 @@ save(
         new_markdown_cell(
             "# Large results: write a file, don't inline a table\n\n"
             + badge("12_large_data.ipynb")
-            + "\n\n`add_features` puts every row into the widget's state as JSON. "
+            + "\n\n`features_track` puts every row into the widget's state as JSON. "
             "That is the right thing for a few thousand peaks, and the wrong "
             "thing by a hundred thousand — the whole table has to be serialized, "
             "pushed through the notebook's comm channel, and held in the "
@@ -945,7 +975,7 @@ save(
         ),
         new_markdown_cell(
             "## What inlining would cost\n\n"
-            "`features_track` builds the config `add_features` would send, so we "
+            "`features_track` builds the config the widget would send, so we "
             "can price a row before committing to two million of them."
         ),
         new_code_cell(
@@ -965,7 +995,7 @@ save(
             "server. `pysam` writes both.\n\n"
             "`add_local_file` registers the bytes under the file's name and "
             "picks up the `.tbi` sibling automatically. After that the name "
-            "**is** the URL: `add_track` infers `BedTabixAdapter` from the "
+            "**is** the URL: the view infers `BedTabixAdapter` from the "
             "`.bed.gz` extension and finds the index by name, exactly as it "
             "would for a remote file."
         ),
@@ -981,7 +1011,7 @@ save(
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView\n\n"
             'view = LinearGenomeView(assembly="hg38", location="17:7,668,400..7,687,500")\n'
-            'view.add_track(view.add_local_file("exons.bed.gz"))\n'
+            'view.update(tracks=[view.add_local_file("exons.bed.gz")])\n'
             "view"
         ),
         new_markdown_cell(
@@ -1018,13 +1048,15 @@ save(
             'print(f"bigWig: {size:.1f} MB, with zoom levels baked in")'
         ),
         new_code_cell(
-            'view.add_track(view.add_local_file("exon_density.bw"))\n'
-            'view.location = "17"\n'
+            "view.update(\n"
+            '    tracks=[*view.options["tracks"], view.add_local_file("exon_density.bw")],\n'
+            '    location="17",\n'
+            ")\n"
             "view"
         ),
         new_markdown_cell(
             "## Which to use\n\n"
-            "| | `add_features` | `add_local_file` |\n"
+            "| | `features_track` | `add_local_file` |\n"
             "|---|---|---|\n"
             "| data | a DataFrame or list of dicts | a real file you wrote |\n"
             "| cost | whole table as JSON, always resident | bytes for the visible region |\n"
@@ -1055,7 +1087,7 @@ save(
             "size rather than by guess.\n\n"
             "| | how it travels | good to |\n"
             "|---|---|---|\n"
-            "| `add_features` | every point inlined as JSON | ~100k points |\n"
+            "| `features_track` | every point inlined as JSON | ~100k points |\n"
             "| bigWig + `add_local_file` | the file crosses once, then byte ranges | tens of MB |\n"
             "| recompute per region | only what's on screen, every pan | **unlimited** |\n\n"
             "Throughout, `signal` stands in for whatever your pipeline produced — "
@@ -1077,7 +1109,7 @@ save(
             'print(f"{starts.size:,} bins at {BIN}bp across chr1")'
         ),
         new_markdown_cell(
-            "## 1. Inline it — `add_features`\n\n"
+            "## 1. Inline it — `features_track`\n\n"
             "A **`score`** column is what makes this a wiggle rather than boxes: "
             "the track comes back as a `QuantitativeTrack` with a value axis and "
             "autoscaling. (That's JBrowse's own name for the plotted value, so "
@@ -1102,9 +1134,12 @@ save(
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView\n\n"
-            'view = LinearGenomeView(assembly="hg38", location="1:1,000,000..1,200,000")\n'
             "window = (starts >= 1_000_000) & (starts < 1_200_000)\n"
-            'view.add_features(rows(starts[window], signal[window]), name="signal (inlined window)")\n'
+            "view = LinearGenomeView(\n"
+            '    assembly="hg38",\n'
+            '    location="1:1,000,000..1,200,000",\n'
+            '    tracks=[features_track(rows(starts[window], signal[window]), name="signal (inlined window)")],\n'
+            ")\n"
             "view"
         ),
         new_markdown_cell(
@@ -1134,8 +1169,10 @@ save(
             'print(f"bigWig: {size:.0f} MB, zoom levels included")'
         ),
         new_code_cell(
-            'view.add_track(view.add_local_file("signal.bw"))\n'
-            'view.location = "1"  # whole chromosome: served from a zoom level\n'
+            "view.update(\n"
+            '    tracks=[*view.options["tracks"], view.add_local_file("signal.bw")],\n'
+            '    location="1",  # whole chromosome: served from a zoom level\n'
+            ")\n"
             "view"
         ),
         new_markdown_cell(
@@ -1172,12 +1209,15 @@ save(
             "        float(signal[a:b].mean()) if b > a else 0.0\n"
             "        for a, b in zip(idx, idx[1:])\n"
             "    ]\n"
-            "    live.tracks = []  # replace the previous window\n"
-            "    live.add_features(\n"
-            '        [{"refName": CHROM, "start": int(s), "end": int(s) + step, "score": round(v, 2)}\n'
-            "         for s, v in zip(edges, values)],\n"
-            '        name="signal (recomputed for this view)",\n'
-            '        track_id="live",\n'
+            "    live.update(\n"
+            "        tracks=[\n"
+            "            features_track(\n"
+            '                [{"refName": CHROM, "start": int(s), "end": int(s) + step, "score": round(v, 2)}\n'
+            "                 for s, v in zip(edges, values)],\n"
+            '                name="signal (recomputed for this view)",\n'
+            '                track_id="live",\n'
+            "            )\n"
+            "        ]\n"
             "    )\n\n\n"
             "def on_location(change):\n"
             '    region = parse_loc(change["new"])\n'
@@ -1205,7 +1245,7 @@ save(
         ),
         new_markdown_cell(
             "## Choosing\n\n"
-            "- **A region you already have in memory** → `add_features` with a "
+            "- **A region you already have in memory** → `features_track` with a "
             "`score` column. One call, no file.\n"
             "- **A whole chromosome or genome you want to browse freely** → write "
             "a bigWig and `add_local_file`. Real zoom levels, real seeking, and "
