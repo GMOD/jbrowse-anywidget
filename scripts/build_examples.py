@@ -1265,4 +1265,220 @@ save(
     ],
 )
 
+# --- 14 scATAC: lasso a UMAP, pseudobulk those cells -------------------------
+save(
+    "14_scatac_umap.ipynb",
+    [
+        new_markdown_cell(
+            "# Lasso cells on a UMAP, pseudobulk them onto the genome\n\n"
+            + badge("14_scatac_umap.ipynb")
+            + "\n\nSingle-cell ATAC gives every cell a few thousand fragments, "
+            "which is nearly all zero on its own. Pooling a group of cells into "
+            "one profile is what makes a track, and the group is usually a "
+            "cluster someone drew on a UMAP. Here the UMAP stays live: lasso "
+            "cells and the genome track repaints with the pseudobulk of exactly "
+            "those cells.\n\n"
+            "The data is the 10x **5k PBMC** scATAC experiment, annotated by "
+            "[SnapATAC2](https://scverse.org/SnapATAC2/). Neither file is "
+            "downloaded — the UMAP and the labels are read out of an 837 MB "
+            "`.h5ad` by HTTP range, and the fragments are range-queried out of a "
+            "1 GB tabix-indexed file."
+        ),
+        new_code_cell(install("h5py plotly")),
+        new_markdown_cell(
+            "## The cells, without downloading the h5ad\n\n"
+            "An `.h5ad` is HDF5, and HDF5 seeks. Give `h5py` a file object that "
+            "turns seeks into `Range` requests and reading `obsm/X_umap`, "
+            "`obs/cell_type` and `obs/index` costs a handful of requests against "
+            "a file you never fetch. `snapatac2` is not needed to read it, and is "
+            "not installed here — this is a spec-compliant h5ad."
+        ),
+        new_code_cell(
+            "import io\n"
+            "import urllib.request\n\n"
+            "import h5py\n"
+            "import numpy as np\n\n"
+            "H5 = (\n"
+            '    "https://exampledata.scverse.org/snapatac2/"\n'
+            '    "atac_pbmc_5k_annotated.h5ad"\n'
+            ")\n"
+            '# The CDN 403s urllib\'s default agent, and answers HEAD with the same.\n'
+            'UA = {"User-Agent": "Mozilla/5.0"}\n\n\n'
+            "class RangeReader(io.RawIOBase):\n"
+            '    """A seekable file over HTTP, so h5py reads only what it needs."""\n\n'
+            "    def __init__(self, url):\n"
+            "        self.url = url\n"
+            "        self.pos = 0\n"
+            "        self.requests = 0\n"
+            "        head = self._get(0, 0)\n"
+            '        self.size = int(head.headers["Content-Range"].split("/")[1])\n\n'
+            "    def _get(self, start, end):\n"
+            "        req = urllib.request.Request(\n"
+            '            self.url, headers={**UA, "Range": f"bytes={start}-{end}"}\n'
+            "        )\n"
+            "        self.requests += 1\n"
+            "        return urllib.request.urlopen(req)\n\n"
+            "    def readable(self):\n"
+            "        return True\n\n"
+            "    def seekable(self):\n"
+            "        return True\n\n"
+            "    def tell(self):\n"
+            "        return self.pos\n\n"
+            "    def seek(self, offset, whence=0):\n"
+            "        base = (0, self.pos, self.size)[whence]\n"
+            "        self.pos = base + offset\n"
+            "        return self.pos\n\n"
+            "    def readinto(self, buf):\n"
+            "        if self.pos >= self.size:\n"
+            "            return 0\n"
+            "        end = min(self.pos + len(buf), self.size) - 1\n"
+            "        data = self._get(self.pos, end).read()\n"
+            "        buf[: len(data)] = data\n"
+            "        self.pos += len(data)\n"
+            "        return len(data)\n\n\n"
+            "raw = RangeReader(H5)\n"
+            "h5 = h5py.File(io.BufferedReader(raw, 1 << 20), \"r\")\n\n"
+            'umap = h5["obsm/X_umap"][:]\n'
+            'cell_type_group = h5["obs/cell_type"]\n'
+            'categories = np.array(\n'
+            '    [c.decode() for c in cell_type_group["categories"][:]]\n'
+            ")\n"
+            'labels = categories[cell_type_group["codes"][:]]\n'
+            'barcodes = np.array([b.decode() for b in h5["obs/index"][:]])\n\n'
+            'print(f"{len(barcodes):,} cells, {len(categories)} labels, "\n'
+            '      f"{raw.requests} range requests against {raw.size / 1e6:.0f} MB")'
+        ),
+        new_markdown_cell(
+            "## The fragments, also without downloading them\n\n"
+            "10x publishes the fragments as a tabix-indexed BED, so `pysam` "
+            "fetches one window out of a gigabyte. The window here is **MS4A1**, "
+            "a B-cell surface marker, which is the point: whether its promoter is "
+            "open should depend on which cells you pooled.\n\n"
+            "htslib needs `CURL_CA_BUNDLE` pointed at a CA bundle before it will "
+            "read an https URL."
+        ),
+        new_code_cell(
+            "import os\n\n"
+            "import certifi\n\n"
+            'os.environ["CURL_CA_BUNDLE"] = certifi.where()\n\n'
+            "import pysam  # noqa: E402 — must follow the CA bundle\n\n"
+            "FRAGMENTS = (\n"
+            '    "https://cf.10xgenomics.com/samples/cell-atac/2.0.0/"\n'
+            '    "atac_pbmc_5k_nextgem/atac_pbmc_5k_nextgem_fragments.tsv.gz"\n'
+            ")\n"
+            'CHROM, START, END = "chr11", 60_450_000, 60_480_000  # MS4A1, hg38\n\n'
+            "tabix = pysam.TabixFile(FRAGMENTS)\n"
+            "rows = [r.split(\"\\t\") for r in tabix.fetch(CHROM, START, END)]\n"
+            "frag_start = np.array([int(r[1]) for r in rows])\n"
+            "frag_end = np.array([int(r[2]) for r in rows])\n"
+            "frag_barcode = np.array([r[3] for r in rows])\n\n"
+            'print(f"{len(rows):,} fragments in the window")'
+        ),
+        new_markdown_cell(
+            "## Pseudobulk of a selection\n\n"
+            "Both ends of a fragment are a cut site, so binning starts and ends "
+            "together is the profile. Dividing by the number of cells selected is "
+            "what makes two selections comparable — without it a lasso around a "
+            "big cluster always looks like more signal.\n\n"
+            "The column is named `score`, which is what turns the result into a "
+            "real wiggle with a value axis rather than boxes to color by hand."
+        ),
+        new_code_cell(
+            "BIN = 200\n"
+            "edges = np.arange(START, END + BIN, BIN)\n\n\n"
+            "def pseudobulk(selected):\n"
+            '    """Cut sites per 1000 cells, in BIN bp bins, for a barcode set."""\n'
+            "    keep = np.isin(frag_barcode, selected)\n"
+            "    cuts = np.histogram(frag_start[keep], bins=edges)[0]\n"
+            "    cuts = cuts + np.histogram(frag_end[keep], bins=edges)[0]\n"
+            "    per_1k = cuts / max(len(selected), 1) * 1000\n"
+            "    return pd.DataFrame(\n"
+            "        {\n"
+            '            "chrom": CHROM,\n'
+            '            "start": edges[:-1],\n'
+            '            "end": edges[:-1] + BIN,\n'
+            '            "score": per_1k.round(1),\n'
+            "        }\n"
+            "    )\n\n\n"
+            "import pandas as pd  # noqa: E402\n\n"
+            'for label in ["Naive B", "Memory B", "CD14 Mono", "NK"]:\n'
+            "    sel = barcodes[labels == label]\n"
+            '    print(f"{label:<10} {len(sel):>4} cells  "\n'
+            '          f"peak {pseudobulk(sel).score.max():>6.1f} cuts/1k cells")'
+        ),
+        new_markdown_cell(
+            "## The UMAP, the view, and the wire between them\n\n"
+            "A plotly `FigureWidget` has a lasso and an `on_selection` callback. "
+            "The callback hands back point indices, which index straight into "
+            "`barcodes` — so the whole wire is one function that replaces the "
+            "track.\n\n"
+            "The opening selection is set in code rather than by gesture, so the "
+            "notebook shows something the moment it runs (and so it renders "
+            "headless)."
+        ),
+        new_code_cell(
+            "import plotly.graph_objects as go\n"
+            "from ipywidgets import VBox\n\n"
+            "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
+            'hg38 = fetch_hub("hg38")\n'
+            "view = LinearGenomeView(\n"
+            '    assembly=hg38["assemblies"][0],\n'
+            '    aggregateTextSearchAdapters=hg38["aggregateTextSearchAdapters"],\n'
+            '    location=f"{CHROM}:{START:,}..{END:,}",\n'
+            ")\n\n"
+            "scatter = go.FigureWidget(\n"
+            "    [\n"
+            "        go.Scattergl(\n"
+            "            x=umap[labels == c, 0],\n"
+            "            y=umap[labels == c, 1],\n"
+            "            mode=\"markers\",\n"
+            "            name=c,\n"
+            "            customdata=np.where(labels == c)[0],\n"
+            "            marker={\"size\": 4},\n"
+            "        )\n"
+            "        for c in categories\n"
+            "    ]\n"
+            ")\n"
+            "scatter.update_layout(\n"
+            '    dragmode="lasso", height=420, margin={"l": 0, "r": 0, "t": 0, "b": 0}\n'
+            ")\n\n\n"
+            "def show(indices, name):\n"
+            "    view.update(\n"
+            "        tracks=[\n"
+            "            features_track(\n"
+            "                pseudobulk(barcodes[indices]),\n"
+            '                name=f"{name} ({len(indices)} cells)",\n'
+            '                track_id="pseudobulk",\n'
+            '                color="#4682b4",\n'
+            "            )\n"
+            "        ]\n"
+            "    )\n\n\n"
+            "def on_lasso(trace, points, state):\n"
+            "    picked = np.concatenate(\n"
+            "        [t.customdata[t.selectedpoints or []] for t in scatter.data]\n"
+            "    ).astype(int)\n"
+            "    if len(picked):\n"
+            '        show(picked, "lassoed cells")\n\n\n'
+            "for trace in scatter.data:\n"
+            "    trace.on_selection(on_lasso)\n\n"
+            'b_cells = np.where(np.isin(labels, ["Naive B", "Memory B"]))[0]\n'
+            'show(b_cells, "B cells")\n\n'
+            "VBox([scatter, view])"
+        ),
+        new_markdown_cell(
+            "## What to try\n\n"
+            "Lasso the two B clusters and the MS4A1 promoter carries a peak; "
+            "lasso the monocytes — a *larger* group — and it flattens. That is "
+            "the check that the track is following the selection rather than the "
+            "cell count.\n\n"
+            "The window is fetched once and every reselection is arithmetic over "
+            "what is already in memory, which is what keeps the lasso live. "
+            "Panning to another gene is one more `tabix.fetch`; "
+            "[notebook 10](10_region_reactive.ipynb) wires that to the view's own "
+            "location, and [notebook 13](13_large_wiggle.ipynb) is where to go "
+            "when the answer stops fitting in `features_track`."
+        ),
+    ],
+)
+
 print("done")

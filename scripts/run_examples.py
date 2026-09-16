@@ -100,6 +100,10 @@ FIGURES = {
         "caption": "12 · 2.1M exons from a tabix file in this kernel",
         "variable": "view",
     },
+    "14_scatac_umap": {
+        "caption": "14 · scATAC pseudobulk of a lassoed UMAP selection",
+        "variable": "view",
+    },
     "13_large_wiggle": {
         "caption": "13 · a chromosome of signal, recomputed per view",
         "variable": "live",
