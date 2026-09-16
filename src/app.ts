@@ -13,7 +13,7 @@ import {
 
 import RpcWorker from '@jbrowse/react-app2/esm/rpcWorker?worker&inline'
 
-import { changedKeys, defineWidget, report, resolveAgainstPage } from './widget'
+import { changedKeys, defineWidget, report } from './widget'
 
 import type { AnyModel } from '@anywidget/types'
 
@@ -37,7 +37,7 @@ async function build(el: HTMLElement, model: AnyModel<JBrowseAppTraits>) {
     aggregateTextSearchAdapters,
     plugins = [],
     ...rest
-  } = resolveAgainstPage(model.get('options'))
+  } = model.get('options')
   // A hub name brings a track catalog and a search index naming hits by those
   // tracks, so the notebook's own tracks and adapters merge in after the hub's
   const resolved = await resolveAssemblies(assemblies, {
@@ -73,9 +73,7 @@ export default {
           const changed = changedKeys(previous, next)
           previous = next
           if (changed.length === 1 && changed[0] === 'session') {
-            controller()?.setSession(
-              resolveAgainstPage(next.session) ?? undefined,
-            )
+            controller()?.setSession(next.session ?? undefined)
           } else if (changed.length) {
             rebuild()
           }

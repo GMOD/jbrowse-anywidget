@@ -234,10 +234,9 @@ untested. Don't simplify that back.
 worker's base is that same blob URL, so a `fetch('/data/x.bam')` there throws
 `Failed to parse URL` and the track says "Network error fetching …" — which
 reads as CORS or a server that ignores range requests, and is neither.
-`resolveAgainstPage` in `src/widget.ts` stamps `document.baseURI` as the
-`baseUri` of every `uri` on the way in, as `addRelativeUris` does for a fetched
-config. A loose `{ uri }` track relies on core's `guessTrackConf` moving that
-`baseUri` onto the locations it guesses (jbrowse-components `67410d384b`).
+`createLinearGenomeView` and `createApp` stamp `document.baseURI` as the
+`baseUri` of every `uri` in their options (jbrowse-components `2854d946b2`), so
+the widget passes options through as the kernel sent them.
 `verify_bundle_runtime.mjs` passed over the failure while it waited only for the
 track container, which a failed fetch still mounts; it waits for a fixture
 peak's label now.

@@ -6,7 +6,7 @@ import { defineConfig } from 'vite'
 // `app.js` (the full multi-view app for synteny/dotplot/etc). They are built by
 // separate `vite build` invocations (see package.json) because inlineDynamicImports
 // — which keeps each to one runtime-resolvable file — forbids multiple entries in
-// one build. RPC runs on the main thread (no makeWorkerInstance) in both.
+// one build.
 const isApp = process.env.JB_TARGET === 'app'
 
 export default defineConfig({
