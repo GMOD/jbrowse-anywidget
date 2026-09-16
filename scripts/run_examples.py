@@ -114,11 +114,6 @@ FIGURES = {
 ECOLI = "https://jbrowse.org/demos/ecoli_pangenome"
 STRAINS = ["K12", "Sakai", "CFT073", "NCTC86"]
 
-# 13_manhattan was here and is currently withdrawn: the config the README
-# documents renders an empty plot against jbrowse-components HEAD — axis, no
-# points — where it drew a full Manhattan on 2026-08-04. Not this repo's doing
-# (it is identical with the RPC worker disabled). Put it back when the plugin
-# does.
 NO_NOTEBOOK = {
     # notebook 11's closing prose says "change the view's type to DotplotView";
     # this is that sentence, rendered
@@ -148,6 +143,30 @@ NO_NOTEBOOK = {
                         "type": "DotplotView",
                         "views": [{"assembly": s} for s in STRAINS[:2]],
                         "tracks": ["ecoli_ava"],
+                    }
+                ],
+            },
+        },
+    },
+    # the README's "Plots" section, which shows a display doing the plotting
+    "13_manhattan": {
+        "bundle": "index.js",
+        "caption": "GWAS summary stats as a Manhattan plot",
+        "traits": {
+            "options": {
+                "assembly": "hg19",
+                "location": "2",
+                "tracks": [
+                    {
+                        "type": "GWASTrack",
+                        "trackId": "gwas_track",
+                        "name": "GWAS",
+                        "adapter": {
+                            "type": "GWASAdapter",
+                            "scoreColumn": "neg_log_pvalue",
+                            "uri": "https://jbrowse.org/genomes/hg19/gwas/summary_stats.txt.gz",
+                        },
+                        "displays": [{"type": "LinearManhattanDisplay", "height": 250}],
                     }
                 ],
             },
