@@ -602,14 +602,16 @@ _GENOMES = "https://jbrowse.org"
 
 
 def fetch_hub(hub: str) -> JsonDict:
-    """Fetch a hosted assembly config from jbrowse.org.
+    """Fetch a hosted assembly config from jbrowse.org, or any config.json URL.
 
-    `hub` is a UCSC database name (``hg38``, ``hg19``, ``mm10``, …) or a GenArk
-    accession (``GCA_...``/``GCF_...``). Returns the full config dict — a
-    self-contained assembly (remote sequence, refName aliases, cytobands) plus a
-    catalog of hosted tracks, all CORS-enabled — which is the easy way to get
-    human/model-organism data without hunting for files. Pull the single
-    assembly out of it for ``LinearGenomeView(assembly=...)``::
+    `hub` is a UCSC database name (``hg38``, ``hg19``, ``mm10``, …), a GenArk
+    accession (``GCA_...``/``GCF_...``), or the ``http(s)://`` URL of any
+    config.json. Returns the full config dict — a self-contained assembly
+    (remote sequence, refName aliases, cytobands) plus a catalog of hosted
+    tracks, all CORS-enabled — which is the easy way to get human/model-organism
+    data without hunting for files. Relative URIs in it are stamped to resolve
+    against the config's own URL. Pull the single assembly out of it for
+    ``LinearGenomeView(assembly=...)``::
 
         hub = fetch_hub("hg38")
         view = LinearGenomeView(
@@ -618,7 +620,9 @@ def fetch_hub(hub: str) -> JsonDict:
         )
     """
     match = re.match(r"^(GC[AF])_(\d{3})(\d{3})(\d{3})", hub)
-    if match:
+    if hub.startswith(("http://", "https://")):
+        url = hub
+    elif match:
         a, b, c, d = match.groups()
         url = f"{_GENOMES}/hubs/genark/{a}/{b}/{c}/{d}/{hub}/config.json"
     else:
@@ -627,10 +631,8 @@ def fetch_hub(hub: str) -> JsonDict:
         with urllib.request.urlopen(url, timeout=_TIMEOUT) as response:
             config = json.load(response)
     except urllib.error.HTTPError as e:
-        raise ValueError(
-            f'hub "{hub}" not found ({e.code} from {url}). '
-            "See https://genomes.jbrowse.org for available assemblies."
-        ) from e
+        hint = "" if url == hub else " See https://genomes.jbrowse.org for hubs."
+        raise ValueError(f'hub "{hub}" not found ({e.code} from {url}).{hint}') from e
     except OSError as e:
         # a DNS failure, refused connection, or timeout — not a missing hub
         raise ValueError(f'could not fetch hub "{hub}" from {url}: {e}') from e
