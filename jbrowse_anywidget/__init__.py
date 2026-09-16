@@ -305,7 +305,7 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
 
         app = JBrowseApp(
             assemblies=[{"name": "hg38", "uri": ...}, {"name": "mm39", "uri": ...}],
-            tracks=[{"type": "SyntenyTrack", "trackId": "hg38_mm39", ...}],
+            tracks=[{"type": "SyntenyTrack", "trackId": "hg38_mm39", "adapter": ...}],
             views=[{
                 "type": "LinearSyntenyView",
                 "views": [{"assembly": "hg38"}, {"assembly": "mm39"}],
