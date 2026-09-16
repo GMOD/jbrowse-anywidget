@@ -145,10 +145,8 @@ NO_NOTEBOOK = {
             "views": [
                 {
                     "type": "DotplotView",
-                    "init": {
-                        "views": [{"assembly": s} for s in STRAINS[:2]],
-                        "tracks": ["ecoli_ava"],
-                    },
+                    "views": [{"assembly": s} for s in STRAINS[:2]],
+                    "tracks": ["ecoli_ava"],
                 }
             ],
         },

@@ -51,13 +51,6 @@ def test_any_view_type_opens_with_no_python_change():
     assert app.views[0]["type"] == "CircularView"
 
 
-def test_a_nested_init_warns_and_names_the_flat_shape():
-    import pytest
-
-    with pytest.warns(FutureWarning, match="directly on the view"):
-        JBrowseApp(views=[{"type": "LinearSyntenyView", "init": {"views": []}}])
-
-
 def test_jbrowse_app_carries_a_session_snapshot():
     snapshot = {"name": "saved", "views": [{"type": "LinearGenomeView"}]}
     app = JBrowseApp(assemblies=[{"name": "hg38"}], views=[], session=snapshot)

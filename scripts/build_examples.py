@@ -869,12 +869,10 @@ save(
             "    views=[\n"
             "        {\n"
             '            "type": "LinearSyntenyView",\n'
-            '            "init": {\n'
-            '                "views": [{"assembly": s} for s in STRAINS],\n'
-            '                "tracks": [["ecoli_ava"]] * 3,  # one band per adjacent pair\n'
-            '                "drawCurves": False,\n'
-            '                "minAlignmentLength": 10000,\n'
-            "            },\n"
+            '            "views": [{"assembly": s} for s in STRAINS],\n'
+            '            "tracks": [["ecoli_ava"]] * 3,  # one band per adjacent pair\n'
+            '            "drawCurves": False,\n'
+            '            "minAlignmentLength": 10000,\n'
             "        }\n"
             "    ],\n"
             ")"
@@ -882,7 +880,8 @@ save(
         new_markdown_cell(
             "The same PAF also opens as a **dotplot** — change the view's `type` "
             'to `"DotplotView"` and give it two panels to see any one pair '
-            "whole-genome. A view spec is only ever `{type, init}`, the same "
+            "whole-genome. A view spec is only ever `{type, ...settings}`, the same "
+            "object a config.json `defaultSession.views` entry holds and the same "
             "vocabulary JBrowse Web puts in its `?session=spec-…` URLs, so any "
             "view type works without anything being added to this package. To build the PAF from your own genomes "
             "(`minimap2 -c -x asm20 --eqx`) and load per-strain gene tracks "

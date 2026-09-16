@@ -49,7 +49,6 @@ import math
 import re
 import urllib.error
 import urllib.request
-import warnings
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -422,20 +421,6 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
                     f"JBrowseApp takes full track config dicts; got {item!r}. "
                     "The bare-uri shorthand is LinearGenomeView's, where the "
                     "view's own assembly names what the track belongs to."
-                )
-        return proposal["value"]
-
-    @traitlets.validate("views")
-    def _warn_nested_init(self, proposal: Any) -> list[JsonDict]:
-        for view in proposal["value"]:
-            if isinstance(view, dict) and "init" in view:
-                warnings.warn(
-                    f'{view.get("type", "a view")} nests its settings under "init", '
-                    "which JBrowse v5 deprecates: write every setting directly on "
-                    'the view, e.g. {"type": "LinearSyntenyView", "views": [...], '
-                    '"tracks": [...]}',
-                    FutureWarning,
-                    stacklevel=2,
                 )
         return proposal["value"]
 
