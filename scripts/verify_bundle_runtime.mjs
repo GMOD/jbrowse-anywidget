@@ -123,9 +123,10 @@ try {
       options: {
         assembly: ASSEMBLY,
         tracks: [track('first', 'First')],
-        // secondary, because that is the slot JBrowse's own header paints with
+        // primary, because the view's pan buttons paint with it; no embedded
+        // chrome has used secondary since the title bar went
         configuration: {
-          theme: { palette: { secondary: { main: '#ff0000' } } },
+          theme: { palette: { primary: { main: '#ff0000' } } },
         },
         location: '17:7,600,000..7,601,000',
       },
@@ -185,7 +186,7 @@ try {
 
   const themed = await page.evaluate(() =>
     [...document.querySelectorAll('*')].some(
-      el => getComputedStyle(el).backgroundColor === 'rgb(255, 0, 0)',
+      el => getComputedStyle(el).color === 'rgb(255, 0, 0)',
     ),
   )
   check(themed, `the configuration option's theme reaches the paint`)
