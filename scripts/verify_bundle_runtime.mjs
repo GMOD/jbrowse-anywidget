@@ -116,7 +116,12 @@ const settle = (selector, id) =>
     .then(
       () => '',
       () =>
-        page.$eval(trackSelector(id), el => el.innerText.trim() || 'no text'),
+        page.$eval(
+          trackSelector(id),
+          el =>
+            el.innerText.trim() ||
+            `phase ${el.querySelector('[data-display-phase]')?.dataset.displayPhase ?? 'unset'}`,
+        ),
     )
 const peaksDrawn = id => settle('[data-testid^="feature-name-peak"]', id)
 const displayReady = id => settle('[data-display-phase="ready"]', id)

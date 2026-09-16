@@ -238,6 +238,18 @@ own `http://` path, which is a friendlier module than a notebook ever gets:
 `import.meta.url` resolves there, so the whole reason the worker is inlined went
 untested. Don't simplify that back.
 
+**A relative data URI has to be resolved before it reaches the worker.** The
+worker's base is that same blob URL, so a `fetch('/data/x.bam')` there throws
+`Failed to parse URL` and the track says "Network error fetching …" — which
+reads as CORS or a server that ignores range requests, and is neither.
+`resolveAgainstPage` in `src/widget.ts` stamps `document.baseURI` as the
+`baseUri` of every `uri` on the way in, as `addRelativeUris` does for a fetched
+config. A loose `{ uri }` track relies on core's `guessTrackConf` moving that
+`baseUri` onto the locations it guesses (jbrowse-components `67410d384b`).
+`verify_bundle_runtime.mjs` passed over the failure while it waited only for the
+track container, which a failed fetch still mounts; it waits for a fixture
+peak's label now.
+
 `scripts/verify_bundle_runtime.mjs` pins it, and pins it _positively_ — on the
 worker's own `self.rpcServer` and its `CoreGetFeatures` method. A worker that
 fails to boot is loud (its driver's boot promise never settles and every track
