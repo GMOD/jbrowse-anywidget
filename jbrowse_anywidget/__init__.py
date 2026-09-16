@@ -387,7 +387,7 @@ class JBrowseApp(_LocalFilesMixin, anywidget.AnyWidget):
 
     def __init__(
         self,
-        assemblies: list[JsonDict] | None = None,
+        assemblies: list[str | JsonDict] | None = None,
         tracks: list[JsonDict] | None = None,
         views: list[JsonDict] | None = None,
         plugins: list[str | JsonDict] | None = None,
