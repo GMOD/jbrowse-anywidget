@@ -27,12 +27,13 @@ export default defineConfig({
   // non-inline `?worker` doesn't even try that; in lib mode it emits a
   // root-absolute `/assets/...` path, wrong for a notebook for its own reason.)
   //
+  // `iife` because lib mode leaves an `es` worker unminified (3 MB per bundle).
   // inlineDynamicImports is the other half, and the one that builds green:
   // without it Vite inlines a worker that still does `import('./chunk')`,
   // resolved against the blob it was started from, and the failure is a 404 at
   // the first BAM read rather than anything the build says.
   worker: {
-    format: 'es',
+    format: 'iife',
     rollupOptions: { output: { inlineDynamicImports: true } },
   },
   resolve: {
