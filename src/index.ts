@@ -9,7 +9,7 @@ import {
 
 import RpcWorker from '@jbrowse/react-linear-genome-view2/esm/rpcWorker?worker&inline'
 
-import { changedKeys, defineWidget, report } from './widget'
+import { changedKeys, defineWidget, report, resolveAgainstPage } from './widget'
 
 import type { AnyModel } from '@anywidget/types'
 
@@ -36,7 +36,7 @@ async function build(
   // it waits, with no controller to receive it, still reaches this build
   const plugins = await loadPlugins(model.get('options').plugins ?? [])
   return createLinearGenomeView(el, {
-    ...model.get('options'),
+    ...resolveAgainstPage(model.get('options')),
     plugins,
     localFiles: model.get('local_files'),
     makeWorkerInstance: () => new RpcWorker(),
@@ -83,7 +83,10 @@ export default {
             update({
               localFiles: model.get('local_files'),
               ...Object.fromEntries(
-                changed.map(key => [key, next[key as keyof Options]]),
+                changed.map(key => [
+                  key,
+                  resolveAgainstPage(next[key as keyof Options]),
+                ]),
               ),
             })
           } else {

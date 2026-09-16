@@ -106,6 +106,21 @@ page.on('pageerror', e => {
 })
 // One element per open track: trackRenderingContainer-<viewId>-<trackId>
 const trackSelector = id => `[data-testid$="-${id}"]`
+// A track whose fetch failed still mounts its container and paints its error
+// in place, so an open track proves nothing about data. These wait on what only
+// fetched data produces: a fixture peak's label, or a display phase of `ready`,
+// which `error` replaces.
+const settle = (selector, id) =>
+  page
+    .waitForSelector(`${trackSelector(id)} ${selector}`, { timeout: 60000 })
+    .then(
+      () => '',
+      () =>
+        page.$eval(trackSelector(id), el => el.innerText.trim() || 'no text'),
+    )
+const peaksDrawn = id => settle('[data-testid^="feature-name-peak"]', id)
+const displayReady = id => settle('[data-display-phase="ready"]', id)
+
 const shownTracks = () =>
   page.evaluate(() =>
     [
@@ -144,6 +159,11 @@ try {
     timeout: 30000,
   })
   await page.waitForSelector(trackSelector('first'), { timeout: 60000 })
+  const firstProblem = await peaksDrawn('first')
+  check(
+    !firstProblem,
+    `the fixture's peaks draw${firstProblem ? ` (${firstProblem})` : ''}`,
+  )
 
   // Ignore the unmount the first render itself causes on an empty container.
   await page.evaluate(() => {
@@ -164,6 +184,11 @@ try {
     track('second', 'Second'),
   )
   await page.waitForSelector(trackSelector('second'), { timeout: 60000 })
+  const secondProblem = await peaksDrawn('second')
+  check(
+    !secondProblem,
+    `the updated track's peaks draw${secondProblem ? ` (${secondProblem})` : ''}`,
+  )
 
   // Identified by what it serves, not by being the only worker on the page: with
   // the RPC on the main thread the parsers spawn their own workers *there*, so
@@ -229,6 +254,11 @@ try {
   )
   const stillLive = await page.evaluate(() => window.__unmounts)
   const loose = await shownTracks()
+  const looseProblem = loose.length ? await displayReady(loose[0]) : 'not open'
+  check(
+    !looseProblem,
+    `the loose spec's bigWig loads${looseProblem ? ` (${looseProblem})` : ''}`,
+  )
   check(
     stillLive === 0,
     `a loose spec updates live too (${stillLive} unmounts)`,

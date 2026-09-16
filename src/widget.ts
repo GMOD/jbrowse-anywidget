@@ -28,6 +28,30 @@ export function changedKeys(
   )
 }
 
+/**
+ * Stamp the page as the `baseUri` of every `uri` (and MultiWiggle `bigWigs`
+ * list) that has none — what `addRelativeUris` does for a fetched config. The
+ * RPC worker runs from a blob URL, which is opaque, so a relative data URI
+ * left for the worker to resolve fails to parse there and the track reports a
+ * network error; resolved against the page, it names what it looks like it
+ * names from the notebook.
+ */
+export function resolveAgainstPage<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(resolveAgainstPage) as T
+  }
+  if (typeof value === 'object' && value !== null) {
+    const record: Record<string, unknown> = Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, resolveAgainstPage(v)]),
+    )
+    if (typeof record.uri === 'string' || Array.isArray(record.bigWigs)) {
+      record.baseUri ??= document.baseURI
+    }
+    return record as T
+  }
+  return value
+}
+
 const ERROR_CLASS = 'jbrowse-anywidget-error'
 
 // A failed build otherwise leaves an empty output cell with the reason only in
