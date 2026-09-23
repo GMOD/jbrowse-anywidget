@@ -41,6 +41,8 @@ scripts = [
   "pyBigWig",
   "scipy",
   "statsmodels",
+  "h5py",
+  "plotly",
 ]
 
 [tool.ruff]

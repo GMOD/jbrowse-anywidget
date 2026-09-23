@@ -20,3 +20,6 @@ uv.lock
 
 # tsc --noEmit still writes this via the inherited incremental config
 tsconfig.tsbuildinfo
+
+# pysam drops a remote tabix index beside the notebook that fetched it
+/*.tbi
