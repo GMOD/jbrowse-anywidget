@@ -42,11 +42,12 @@ A linear view with a conservation bigWig
 
 ![quickstart: an assembly and a phyloP bigWig](images/01_quickstart.png)
 
-A bioframe interval result dropped onto the genome — CpG islands colored by GC%,
-plus their shores
+A bioframe interval result dropped onto the genome — CpG islands as bars of GC%
+up close and a count per zoom-following bin across the arm, from one mark
+display, plus their shores
 ([02](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)):
 
-![bioframe result: CpG islands colored by GC%, with their shores](images/02_bioframe.png)
+![bioframe result: CpG islands counted per zoom-following bin across 17p, over their shores](images/02_bioframe.png)
 
 GPU-rendered CRAM alignments, from a hub assembly named by string
 ([03](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/03_alignments.ipynb)):
@@ -60,7 +61,8 @@ Multi-sample structural variants, one row per sample, colored by cohort
 
 ### Run an analysis, load the result onto the genome
 
-pysam read depth over _BRCA1_, binned and colored by coverage
+pysam read depth over _BRCA1_, binned, drawn as bars on a value axis with a
+threshold colour scale
 ([05](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_bam_coverage.ipynb)):
 
 ![NA12878 exome depth over BRCA1 from pysam](images/05_bam_coverage.png)

@@ -9,8 +9,10 @@ from this repo, so no local setup is needed).
   two-way location sync between Python and the view.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/01_quickstart.ipynb)
 - **[02 · bioframe → track](02_dataframe_analysis.ipynb)** — real UCSC CpG
-  islands, one bioframe operation (their shores), both on the genome; any
-  bioframe/pandas frame is one `features_track` call away.
+  islands, one bioframe operation (their shores), both on the genome; the
+  islands are a mark display that plots GC% up close and counts islands per
+  zoom-following bin across the arm. Any bioframe/pandas frame is one
+  `features_track` call away.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/02_dataframe_analysis.ipynb)
 - **[03 · GPU alignments](03_alignments.ipynb)** — a BAM/CRAM pileup on the GPU,
   colored by pair orientation, soft-clips shown.

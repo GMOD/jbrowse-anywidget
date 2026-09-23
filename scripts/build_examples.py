@@ -66,6 +66,26 @@ def save(name, cells):
     print("wrote examples/" + name)
 
 
+# The depth plot notebooks 05 and 10 share: bars on a value axis, coloured by a
+# threshold scale whose cuts the legend lists.
+DEPTH = (
+    "DEPTH = {\n"
+    '    "type": "LinearMarkDisplay",\n'
+    '    "scales": {"y": {"title": "depth"}},\n'
+    '    "marks": [{\n'
+    '        "shape": "bar",\n'
+    '        "encoding": {\n'
+    '            "y": "depth",\n'
+    '            "color": {\n'
+    '                "field": "depth", "scale": "threshold",\n'
+    '                "domain": [10, 40],\n'
+    '                "range": ["#cfcfcf", "#f9a825", "#c62828"],\n'
+    "            },\n"
+    "        },\n"
+    "    }],\n"
+    "}\n"
+)
+
 # --- 01 quickstart ----------------------------------------------------------
 save(
     "01_quickstart.ipynb",
@@ -167,9 +187,13 @@ save(
         ),
         new_markdown_cell(
             "## Both on the genome\n\n"
-            "One `features_track` per frame. Islands are colored by GC% — a column "
-            "that rides along and shows in each feature's details; any column "
-            "does. This lands on *TP53*."
+            "One `features_track` per frame. The islands get a `LinearMarkDisplay`, "
+            "JBrowse's grammar of graphics over the frame's columns: a `bar` per "
+            "island with `perGc` on the value axis, coloured by a linear ramp over "
+            "`obsExp`, and a second mark that takes over past 200 bp per pixel — a "
+            "`bin` whose width follows the zoom and an `aggregate` count — so zooming "
+            "out from *TP53* to the whole chromosome turns the same track into an "
+            "island density, from one fetch. The shores are plain features under it."
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView, features_track\n\n"
@@ -183,14 +207,43 @@ save(
             '    location="17:7,660,000..7,700,000",\n'
             "    tracks=[\n"
             "        features_track(\n"
-            '            islands, name="CpG islands (by GC%)",\n'
-            "            color=\"jexl:get(feature,'perGc') > 65 ? '#00695c' : '#4db6ac'\",\n"
+            '            islands, name="CpG islands",\n'
+            "            displays=[{\n"
+            '                "type": "LinearMarkDisplay",\n'
+            '                "marks": [\n'
+            "                    {\n"
+            '                        "shape": "bar",\n'
+            '                        "encoding": {\n'
+            '                            "y": "perGc",\n'
+            '                            "color": {"field": "obsExp", "scale": "linear", "title": "obs/exp CpG"},\n'
+            "                        },\n"
+            '                        "maxBpPerPx": 200,\n'
+            "                    },\n"
+            "                    {\n"
+            '                        "shape": "bar",\n'
+            '                        "transform": [\n'
+            '                            {"type": "bin", "step": "auto"},\n'
+            '                            {"type": "aggregate", "ops": [{"op": "count"}]},\n'
+            "                        ],\n"
+            '                        "encoding": {"y": "count", "color": "#00695c"},\n'
+            '                        "minBpPerPx": 200,\n'
+            "                    },\n"
+            "                ],\n"
+            "            }],\n"
             "        ),\n"
             '        features_track(shores, name="CpG shores", color="#f9a825"),\n'
             "    ],\n"
             ")\n"
             "view"
         ),
+        new_markdown_cell(
+            "## Zoom out, and the same track is a density\n\n"
+            "Past 200 bp per pixel the first mark is off and the second draws: "
+            "islands counted per bin, the bin width chosen from the zoom, with "
+            "no second track and no second fetch. Across the short arm the "
+            "count follows the gene-dense bands."
+        ),
+        new_code_cell('view.update(location="17:1..25,000,000")'),
     ],
 )
 
@@ -390,21 +443,21 @@ save(
         new_markdown_cell(
             "## See it on hg19, opened at the gene by name\n\n"
             '`fetch_hub("hg19")` brings the genome and a gene-name search index, '
-            'so `location="BRCA1"` just works. Exome capture concentrates reads '
-            "on the exons — the depth track peaks there and drops between."
+            'so `location="BRCA1"` just works. The `depth` column is a bar per '
+            "bin on a value axis, through a `LinearMarkDisplay` whose threshold "
+            "colour scale cuts at 10 and 40 reads and puts those cuts in the "
+            "legend. Exome capture concentrates reads on the exons — the depth "
+            "peaks there and drops between."
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
-            'hg19 = fetch_hub("hg19")\n'
+            'hg19 = fetch_hub("hg19")\n' + DEPTH + "\n"
             "view = LinearGenomeView(\n"
             '    assembly=hg19["assemblies"][0],\n'
             '    aggregateTextSearchAdapters=hg19["aggregateTextSearchAdapters"],\n'
             '    location="BRCA1",\n'
             "    tracks=[\n"
-            "        features_track(\n"
-            '            coverage, name="NA12878 exome depth",\n'
-            "            color=\"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\",\n"
-            "        )\n"
+            '        features_track(coverage, name="NA12878 exome depth", displays=[DEPTH]),\n'
             "    ],\n"
             ")\n"
             "view"
@@ -861,7 +914,8 @@ save(
         new_markdown_cell(
             "## Recompute on every pan\n\n"
             "`on_location` parses the view's locstring and re-renders coverage for "
-            'that window. `view.observe(..., "location")` fires it whenever the '
+            "that window, through the same `DEPTH` mark display as the BAM coverage "
+            'notebook. `view.observe(..., "location")` fires it whenever the '
             "view reports a new region — after a drag in the UI, or after "
             "`view.update(location=...)` lands. A gene-name or whole-chromosome location doesn't parse, and a "
             "window wider than 5 Mb is skipped to keep each per-pan query snappy."
@@ -869,8 +923,7 @@ save(
         new_code_cell(
             "import re\n\n"
             "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
-            'hg19 = fetch_hub("hg19")\n'
-            "COLOR = \"jexl:get(feature,'depth') > 40 ? '#c62828' : get(feature,'depth') > 10 ? '#f9a825' : '#cfcfcf'\"\n\n\n"
+            'hg19 = fetch_hub("hg19")\n' + DEPTH + "\n\n"
             "def parse_loc(loc):\n"
             '    m = re.match(r"^\\s*([^:\\s]+)\\s*:\\s*([\\d,]+)\\s*\\.\\.\\s*([\\d,]+)", loc or "")\n'
             '    return (m[1], int(m[2].replace(",", "")), int(m[3].replace(",", ""))) if m else None\n\n\n'
@@ -882,7 +935,7 @@ save(
             "                    coverage(chrom, start, end),\n"
             '                    name="NA12878 exome depth (visible region)",\n'
             '                    track_id="depth",\n'
-            "                    color=COLOR,\n"
+            "                    displays=[DEPTH],\n"
             "                )\n"
             "            ]\n"
             "        )\n\n\n"
