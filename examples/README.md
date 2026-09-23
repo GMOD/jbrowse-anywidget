@@ -29,10 +29,13 @@ Compute a result with the tools you already use, then load it with
   the genome (only the index and the region are fetched, not the 17 GB BAM).
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/05_bam_coverage.ipynb)
 - **[06 · Selection scan → view](06_popgen_selection.ipynb)** — a windowed Fst
-  scan between two _Drosophila_ populations; the sweep lands over _Cyp6g1_.
+  scan between two _Drosophila_ populations, drawn by a mark display as bars on
+  a value axis coloured by a threshold scale; the sweep lands over _Cyp6g1_.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)
 - **[07 · Differential expression → view](07_differential_expression.ipynb)** —
-  counts → log2 fold-change / t-test → a gene track colored by call.
+  counts → log2 fold-change / t-test → a point per gene at its fold-change,
+  coloured by call, from a `LinearMarkDisplay` encoding over the DataFrame's
+  columns.
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)
 
 ## Data access

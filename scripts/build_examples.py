@@ -459,9 +459,12 @@ save(
         new_markdown_cell(
             "## View the sweep on dm6\n\n"
             '`fetch_hub("dm6")` pulls the fly genome, refName aliases, and a '
-            "gene-name search index from the hosted hub. The computed Fst windows "
-            "redden at the peak; the per-population diversity loads as a two-line "
-            "wiggle — cosmopolitan collapses at the sweep while African holds."
+            "gene-name search index from the hosted hub. The Fst windows are a "
+            "`LinearMarkDisplay`: a `bar` per window with `fst` on the value axis, "
+            "coloured by a threshold scale over the same column, so the axis, the "
+            "legend and the 0.25 rule all come from the encoding rather than from "
+            "code. The per-population diversity loads as a two-line wiggle — "
+            "cosmopolitan collapses at the sweep while African holds."
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView, features_track, fetch_hub\n\n"
@@ -479,7 +482,21 @@ save(
             "        features_track(\n"
             "            windows,\n"
             '            name="Fst (African vs cosmopolitan)",\n'
-            "            color=\"jexl:get(feature,'fst') > 0.25 ? '#d84315' : get(feature,'fst') > 0.12 ? '#f9a825' : '#90a4ae'\",\n"
+            "            displays=[{\n"
+            '                "type": "LinearMarkDisplay",\n'
+            '                "scales": {"y": {"title": "Fst", "rules": [0.25]}},\n'
+            '                "marks": [{\n'
+            '                    "shape": "bar",\n'
+            '                    "encoding": {\n'
+            '                        "y": "fst",\n'
+            '                        "color": {\n'
+            '                            "field": "fst", "scale": "threshold",\n'
+            '                            "domain": [0.12, 0.25],\n'
+            '                            "range": ["#90a4ae", "#f9a825", "#d84315"],\n'
+            "                        },\n"
+            "                    },\n"
+            "                }],\n"
+            "            }],\n"
             "        ),\n"
             "        {\n"
             '            "type": "MultiQuantitativeTrack",\n'
@@ -489,8 +506,8 @@ save(
             '                div("African (ancestral)", "#377eb8", "african"),\n'
             '                div("Cosmopolitan (derived)", "#e41a1c", "cosmopolitan"),\n'
             "            ]},\n"
-            '            "displays": [{"type": "MultiLinearWiggleDisplay",\n'
-            '                          "displayId": "diversity-d", "defaultRendering": "multiline"}],\n'
+            '            "displays": [{"type": "LinearWiggleDisplay", "displayId": "diversity-d",\n'
+            '                          "defaultRendering": "line", "rows": ""}],\n'
             "        },\n"
             '        next(t for t in dm6["tracks"] if t["trackId"] == "dm6-ncbiRefSeqCurated"),\n'
             "    ],\n"
@@ -508,8 +525,9 @@ save(
             "# Differential expression → view\n\n"
             + badge("07_differential_expression.ipynb")
             + "\n\nAnother analysis→genome loop: run a small DE analysis over "
-            "gene counts, then load each gene colored by its result — "
-            "up-regulated red, down-regulated blue."
+            "gene counts, then plot the result table on the genome the way a "
+            "grammar of graphics would — each gene a point at its log2 "
+            "fold-change, coloured by call, with the cutoffs drawn as rules."
         ),
         new_code_cell(install("scipy statsmodels")),
         new_markdown_cell(
@@ -558,9 +576,14 @@ save(
             'de.sort_values("padj").head()'
         ),
         new_markdown_cell(
-            "## Load the DE table onto the genome\n\n"
-            "Each gene is colored by call; `log2fc`/`padj` ride along and show "
-            "in the feature details."
+            "## Plot the DE table on the genome\n\n"
+            "`features_track` inlines the rows; the `displays` entry says how to "
+            "draw them. A `LinearMarkDisplay` is JBrowse's grammar of graphics: "
+            "`encoding` maps columns to channels — `log2fc` to `y`, `sig` to a "
+            "categorical colour — and `scales.y` carries the axis title and the "
+            "±1 fold-change rules. The legend comes from the scale, the axis from "
+            "the data, and `padj` still rides along into each point's details. "
+            "Think `aes(y = log2fc, colour = sig)`."
         ),
         new_code_cell(
             "from jbrowse_anywidget import LinearGenomeView, features_track\n\n"
@@ -576,7 +599,22 @@ save(
             "        features_track(\n"
             "            de,\n"
             '            name="differential expression",\n'
-            "            color=\"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\",\n"
+            "            displays=[{\n"
+            '                "type": "LinearMarkDisplay",\n'
+            '                "height": 200,\n'
+            '                "scales": {"y": {"title": "log2 fold-change", "rules": [1, -1]}},\n'
+            '                "marks": [{\n'
+            '                    "shape": "point",\n'
+            '                    "encoding": {\n'
+            '                        "y": "log2fc",\n'
+            '                        "color": {\n'
+            '                            "field": "sig", "scale": "categorical",\n'
+            '                            "domain": ["up", "down", "ns"],\n'
+            '                            "range": ["#c62828", "#1565c0", "#cfcfcf"],\n'
+            "                        },\n"
+            "                    },\n"
+            "                }],\n"
+            "            }],\n"
             "        )\n"
             "    ],\n"
             ")\n"
@@ -714,9 +752,13 @@ save(
             "## Wire a slider to the view\n\n"
             "`render` reruns `classify` at the slider's cutoff and states the "
             "track list as just that track, so moving the slider repaints in "
-            "place rather than stacking tracks. `slider.observe` calls it on every change — "
-            "including a programmatic one, which is how this runs headless below. "
-            "Drag the slider and the genes recolor live."
+            "place rather than stacking tracks. The track is a `LinearMarkDisplay` "
+            "— a point per gene at its `log2fc`, coloured by `sig` — and the "
+            "encoding is written once: listing the scale's `domain` keeps each "
+            "call's colour fixed as genes move between them, and the ±1 rules "
+            "stay put while the points recolour. `slider.observe` calls `render` "
+            "on every change — including a programmatic one, which is how this "
+            "runs headless below."
         ),
         new_code_cell(
             "import ipywidgets as widgets\n\n"
@@ -727,7 +769,22 @@ save(
             '    "aliases": ["hg38"],\n'
             "}\n"
             'view = LinearGenomeView(assembly=grch38, location="7:1,000,000..4,300,000")\n\n'
-            "COLOR = \"jexl:get(feature,'sig') == 'up' ? '#c62828' : get(feature,'sig') == 'down' ? '#1565c0' : '#cfcfcf'\"\n\n\n"
+            "PLOT = {\n"
+            '    "type": "LinearMarkDisplay",\n'
+            '    "height": 200,\n'
+            '    "scales": {"y": {"title": "log2 fold-change", "rules": [1, -1]}},\n'
+            '    "marks": [{\n'
+            '        "shape": "point",\n'
+            '        "encoding": {\n'
+            '            "y": "log2fc",\n'
+            '            "color": {\n'
+            '                "field": "sig", "scale": "categorical",\n'
+            '                "domain": ["up", "down", "ns"],\n'
+            '                "range": ["#c62828", "#1565c0", "#cfcfcf"],\n'
+            "            },\n"
+            "        },\n"
+            "    }],\n"
+            "}\n\n\n"
             "def render(pvalue_cutoff):\n"
             "    view.update(\n"
             "        tracks=[\n"
@@ -735,7 +792,7 @@ save(
             "                classify(pvalue_cutoff),\n"
             '                name=f"DE (p < {pvalue_cutoff:g})",\n'
             '                track_id="de",\n'
-            "                color=COLOR,\n"
+            "                displays=[PLOT],\n"
             "            )\n"
             "        ]\n"
             "    )\n\n\n"
@@ -1302,7 +1359,7 @@ save(
             '    "https://exampledata.scverse.org/snapatac2/"\n'
             '    "atac_pbmc_5k_annotated.h5ad"\n'
             ")\n"
-            '# The CDN 403s urllib\'s default agent, and answers HEAD with the same.\n'
+            "# The CDN 403s urllib's default agent, and answers HEAD with the same.\n"
             'UA = {"User-Agent": "Mozilla/5.0"}\n\n\n'
             "class RangeReader(io.RawIOBase):\n"
             '    """A seekable file over HTTP, so h5py reads only what it needs."""\n\n'
@@ -1337,10 +1394,10 @@ save(
             "        self.pos += len(data)\n"
             "        return len(data)\n\n\n"
             "raw = RangeReader(H5)\n"
-            "h5 = h5py.File(io.BufferedReader(raw, 1 << 20), \"r\")\n\n"
+            'h5 = h5py.File(io.BufferedReader(raw, 1 << 20), "r")\n\n'
             'umap = h5["obsm/X_umap"][:]\n'
             'cell_type_group = h5["obs/cell_type"]\n'
-            'categories = np.array(\n'
+            "categories = np.array(\n"
             '    [c.decode() for c in cell_type_group["categories"][:]]\n'
             ")\n"
             'labels = categories[cell_type_group["codes"][:]]\n'
@@ -1368,7 +1425,7 @@ save(
             ")\n"
             'CHROM, START, END = "chr11", 60_450_000, 60_480_000  # MS4A1, hg38\n\n'
             "tabix = pysam.TabixFile(FRAGMENTS)\n"
-            "rows = [r.split(\"\\t\") for r in tabix.fetch(CHROM, START, END)]\n"
+            'rows = [r.split("\\t") for r in tabix.fetch(CHROM, START, END)]\n'
             "frag_start = np.array([int(r[1]) for r in rows])\n"
             "frag_end = np.array([int(r[2]) for r in rows])\n"
             "frag_barcode = np.array([r[3] for r in rows])\n\n"
@@ -1431,10 +1488,10 @@ save(
             "        go.Scattergl(\n"
             "            x=umap[labels == c, 0],\n"
             "            y=umap[labels == c, 1],\n"
-            "            mode=\"markers\",\n"
+            '            mode="markers",\n'
             "            name=c,\n"
             "            customdata=np.where(labels == c)[0],\n"
-            "            marker={\"size\": 4},\n"
+            '            marker={"size": 4},\n'
             "        )\n"
             "        for c in categories\n"
             "    ]\n"

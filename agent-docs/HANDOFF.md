@@ -13,7 +13,7 @@ The public surface is six names, and each earns its place by that bar:
 |                                   | why it survives             |
 | --------------------------------- | --------------------------- |
 | `LinearGenomeView`, `JBrowseApp`  | the widgets                 |
-| `add_features` / `features_track` | a DataFrame is not JSON     |
+| `features_track`                  | a DataFrame is not JSON     |
 | `add_local_file`                  | bytes are not JSON          |
 | `fetch_hub`, `plugin`             | a network fetch is not JSON |
 
@@ -130,9 +130,17 @@ non-background pixels and a _good_ figure, `03_alignments`, scored 14.6%. No
 threshold separates them, and restricting the sample to the lower 55% did not
 either. Whatever catches a figure that lost its data, it is not pixel counting.
 
-**`score` is the magic column.** `add_features` builds a `QuantitativeTrack` — a
-real wiggle with a value axis — only when a column is literally named `score`.
-`depth`/`signal` render as boxes. `quantitative=` overrides.
+**`score` is the magic column.** `features_track` builds a `QuantitativeTrack` —
+a real wiggle with a value axis — only when a column is literally named `score`.
+`depth`/`signal` render as boxes. `quantitative=` overrides. Any other keyword
+is track config merged on top; `displays=[{"type": "LinearMarkDisplay", ...}]`
+is how a column becomes a plot with an axis, and notebooks 06, 07 and 09 use it.
+
+**The bundle is what draws the grammar.** The mark display's threshold scales,
+reference rules and axis titles landed in the monorepo on 2026-09-20/21; a
+bundle built before that renders the same config with a viridis ramp, no rules
+and no title, and every readiness signal says done. Rebuild before judging a
+figure that ignores part of its encoding.
 
 **Screenshot images are timing-dependent.** Re-rendering produces byte-different
 PNGs even with no code change. Don't commit regenerated figures in a change that

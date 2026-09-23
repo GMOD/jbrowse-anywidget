@@ -66,15 +66,17 @@ pysam read depth over _BRCA1_, binned and colored by coverage
 ![NA12878 exome depth over BRCA1 from pysam](images/05_bam_coverage.png)
 
 A windowed Fst scan between two _Drosophila_ populations, the sweep landing over
-_Cyp6g1_, with per-population diversity underneath
+_Cyp6g1_: a bar per window on a value axis, coloured by a threshold scale, with
+per-population diversity underneath
 ([06](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/06_popgen_selection.ipynb)):
 
-![Fst windows peaking over Cyp6g1, with a two-line diversity wiggle](images/06_popgen_selection.png)
+![Fst bars peaking over Cyp6g1 past the 0.25 rule, with a two-line diversity wiggle](images/06_popgen_selection.png)
 
-Differential expression, each gene colored by call
+Differential expression as a plot on the genome: a point per gene at its log2
+fold-change, coloured by call, the cutoffs drawn as rules
 ([07](https://colab.research.google.com/github/GMOD/jbrowse-anywidget/blob/main/examples/07_differential_expression.ipynb)):
 
-![genes colored red for up, blue for down](images/07_differential_expression.png)
+![a point per gene at its log2 fold-change, red up and blue down, between the ±1 rules](images/07_differential_expression.png)
 
 ### Data access, and the loop back to Python
 
@@ -239,7 +241,9 @@ the track type and adapter from the extension with JBrowse's own format plugins.
 Python adds only what JSON cannot express:
 
 - `features_track(df, name=, color=, ...)` turns a DataFrame or a list of dicts
-  into a track config, inlining the rows. A `score` column makes it a wiggle.
+  into a track config, inlining the rows. A `score` column makes it a wiggle,
+  and any other keyword is track config merged on top, so `displays=` plots
+  the columns ([Plots](#plots-gwas-manhattan-and-more)).
 - `view.add_local_file(path)` pushes a file from this kernel into the browser,
   where it is read by byte range, and returns the name to use as its URL.
 - `fetch_hub("hg38")` fetches a hosted config (a UCSC name, a GenArk accession,
@@ -309,8 +313,44 @@ LinearGenomeView(
 
 ![GWAS summary statistics drawn as a Manhattan plot across chromosome 2](images/13_manhattan.png)
 
+A DataFrame's columns plot the same way. `LinearMarkDisplay` is JBrowse's
+grammar of graphics, in the sense of Vega-Lite or ggplot: `marks` lists a `bar`,
+`point` or `span` per entry, each `encoding` maps a column to a channel, a
+`scale` is `categorical`, `linear`, `log` or `threshold`, and `scales.y` carries
+the axis title and reference rules. The legend and axis follow from the
+encoding, so there is no colour expression to write. Think
+`aes(y = log2fc, colour = sig)`:
+
+```python
+features_track(
+    de,
+    name="differential expression",
+    displays=[{
+        "type": "LinearMarkDisplay",
+        "scales": {"y": {"title": "log2 fold-change", "rules": [1, -1]}},
+        "marks": [{
+            "shape": "point",
+            "encoding": {
+                "y": "log2fc",
+                "color": {
+                    "field": "sig", "scale": "categorical",
+                    "domain": ["up", "down", "ns"],
+                    "range": ["#c62828", "#1565c0", "#cfcfcf"],
+                },
+            },
+        }],
+    }],
+)
+```
+
+Notebooks 06, 07 and 09 draw their results this way, and a `transform` list
+(`bin`, `aggregate`, `coverage`, `pileup`) can summarize the rows before the
+encoding; the
+[mark display guide](https://jbrowse.org/jb2/docs/config_guides/mark_display/)
+has the whole grammar.
+
 JBrowse's [config guide](https://jbrowse.org/jb2/docs/config_guide/) and the
-per-type [config docs](https://jbrowse.org/jb2/docs/config/) cover many such
+per-type [config docs](https://jbrowse.org/jb2/docs/config/) cover the other
 display-driven plots (Manhattan/LD, Hi-C matrices, multi-wiggle, sashimi) — each
 is a track config plus a `displays` choice.
 
