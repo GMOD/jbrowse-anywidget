@@ -80,11 +80,17 @@ def _snippets():
 
 
 def _keywords():
+    """The keywords each documented callable takes; None where it takes any."""
     accepted = {}
     for name in jb.__all__:
         obj = getattr(jb, name)
         if inspect.isfunction(obj):
-            accepted[name] = set(inspect.signature(obj).parameters)
+            params = inspect.signature(obj).parameters.values()
+            accepted[name] = (
+                None
+                if any(p.kind is p.VAR_KEYWORD for p in params)
+                else {p.name for p in params}
+            )
     accepted["add_local_file"] = set(
         inspect.signature(jb.LinearGenomeView.add_local_file).parameters
     )
@@ -108,11 +114,8 @@ def _drift(source):
                 func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
             )
             for keyword in node.keywords:
-                if (
-                    called in accepted
-                    and keyword.arg
-                    and keyword.arg not in accepted[called]
-                ):
+                takes = accepted.get(called)
+                if takes is not None and keyword.arg and keyword.arg not in takes:
                     yield f"{called}(...) takes no {keyword.arg}="
         elif isinstance(node, ast.Dict):
             keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]

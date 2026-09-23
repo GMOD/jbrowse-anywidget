@@ -149,6 +149,7 @@ def features_track(
     assembly_name: str | None = None,
     color: str | None = None,
     quantitative: bool | None = None,
+    **config: Any,
 ) -> JsonDict:
     """Build a track config from a DataFrame or list of dicts, inlining the rows.
 
@@ -160,6 +161,25 @@ def features_track(
     a value axis and autoscaling, rather than boxes to color by hand. `score` is
     JBrowse's own name for the plotted value, so a column called `depth` or
     `signal` will not do it; rename, or pass `quantitative=` to decide outright.
+
+    Any other keyword is track config merged on top, so a `displays` list plots
+    the columns the way a grammar of graphics does — a `LinearMarkDisplay`
+    with a `y` field and a colour scale::
+
+        features_track(
+            de,
+            name="differential expression",
+            displays=[{
+                "type": "LinearMarkDisplay",
+                "marks": [{
+                    "shape": "point",
+                    "encoding": {
+                        "y": "log2fc",
+                        "color": {"field": "sig", "scale": "categorical"},
+                    },
+                }],
+            }],
+        )
 
     The rows travel as JSON, which suits a few thousand; `add_local_file` is
     the route for more. `assembly_name` is only needed to pin the track to an
@@ -180,7 +200,7 @@ def features_track(
     if color:
         display = "LinearWiggleDisplay" if quantitative else "LinearBasicDisplay"
         track["displays"] = [{"type": display, "color": color}]
-    return track
+    return {**track, **config}
 
 
 def _to_features(features: FeatureSource, track_id: str) -> list[JsonDict]:

@@ -127,3 +127,19 @@ def test_color_lands_on_the_display_the_track_type_uses():
     assert wiggle["type"] == "LinearWiggleDisplay"
     boxes = features_track(rows, color="red", quantitative=False)["displays"][0]
     assert boxes["type"] == "LinearBasicDisplay"
+
+
+def test_extra_keywords_are_track_config():
+    # a displays list is how the columns become a plot: the DataFrame's fields
+    # feed a mark display's encoding, with nothing here naming the display
+    displays = [
+        {
+            "type": "LinearMarkDisplay",
+            "marks": [{"shape": "point", "encoding": {"y": "log2fc"}}],
+        }
+    ]
+    rows = [{"refName": "1", "start": 0, "end": 10, "log2fc": 1.5}]
+    track = features_track(rows, displays=displays, height=200)
+    assert track["displays"] == displays
+    assert track["height"] == 200
+    assert track["type"] == "FeatureTrack"
