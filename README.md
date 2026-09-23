@@ -244,8 +244,8 @@ Python adds only what JSON cannot express:
 
 - `features_track(df, name=, color=, ...)` turns a DataFrame or a list of dicts
   into a track config, inlining the rows. A `score` column makes it a wiggle,
-  and any other keyword is track config merged on top, so `displays=` plots
-  the columns ([Plots](#plots-gwas-manhattan-and-more)).
+  and any other keyword is track config merged on top, so `displays=` plots the
+  columns ([Plots](#plots-gwas-manhattan-and-more)).
 - `view.add_local_file(path)` pushes a file from this kernel into the browser,
   where it is read by byte range, and returns the name to use as its URL.
 - `fetch_hub("hg38")` fetches a hosted config (a UCSC name, a GenArk accession,

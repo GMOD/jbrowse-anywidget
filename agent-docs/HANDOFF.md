@@ -10,12 +10,12 @@ dict handed to JBrowse.
 
 The public surface is six names, and each earns its place by that bar:
 
-|                                   | why it survives             |
-| --------------------------------- | --------------------------- |
-| `LinearGenomeView`, `JBrowseApp`  | the widgets                 |
-| `features_track`                  | a DataFrame is not JSON     |
-| `add_local_file`                  | bytes are not JSON          |
-| `fetch_hub`, `plugin`             | a network fetch is not JSON |
+|                                  | why it survives             |
+| -------------------------------- | --------------------------- |
+| `LinearGenomeView`, `JBrowseApp` | the widgets                 |
+| `features_track`                 | a DataFrame is not JSON     |
+| `add_local_file`                 | bytes are not JSON          |
+| `fetch_hub`, `plugin`            | a network fetch is not JSON |
 
 A **trait** is not a helper and does not count against that bar —
 `configuration` is JBrowse's root config block handed straight over, so `theme`,
