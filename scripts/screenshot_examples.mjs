@@ -4,25 +4,18 @@
 // (from run_examples.py); writes images/<name>.png.
 //
 // Run:  node scripts/screenshot_examples.mjs [name ...]
-// puppeteer resolves from the sibling jbrowse-components checkout; override with
-// PUPPETEER_FROM=/path/to/pkg-dir.
+// @jbrowse/capture resolves from the sibling jbrowse-components checkout;
+// override with PUPPETEER_FROM=/path/to/pkg-dir.
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import {
   ANYWIDGET_LOADER,
   REPO,
-  fromMonorepo,
   launch,
   serveRepo,
+  waitForJBrowseReady,
 } from './browser_harness.mjs'
-
-// readiness waits come from the same checkout's @jbrowse/capture, so a capture
-// here uses the identical signals jb2capture and the website screenshot
-// generator use (per-display phase attributes, the loading overlay, visible
-// "Loading…" banners) instead of a bespoke sleep
-const { waitForLoadingComplete, waitForQuiescent } =
-  await import(fromMonorepo('products/jbrowse-capture/src/index.ts'))
 
 const specs = JSON.parse(
   await readFile(join(REPO, 'scripts/screenshot_specs.json'), 'utf8'),
@@ -81,18 +74,10 @@ async function browserFor(headed = false) {
 
 const READY_TIMEOUT = 90000
 
-// ready when the loading overlay is gone, no "Downloading…"/"Loading…" status
-// text remains, and no display is still fetching or unpainted
-async function waitForReady(page) {
-  await waitForLoadingComplete(page, {
-    waitForDownloads: true,
-    timeout: READY_TIMEOUT,
-  })
-  await waitForQuiescent(page, { timeout: READY_TIMEOUT })
-}
-
 // Render one spec in a fresh page and write its figure. Returns the page errors
-// it collected, or null when the widget never painted a canvas at all.
+// it collected, or null when the widget never finished its first frame: the
+// wait jb2capture uses, which fails over a display still loading, canceled, or
+// showing an error banner, and names it.
 //
 // NOT "or painted an empty one". A track that fetched nothing still paints its
 // axis, ruler and gridlines, and a blank-picture heuristic was tried and
@@ -131,14 +116,14 @@ async function capture(name, spec) {
       await page.waitForFunction(() => window.__rendered === true, {
         timeout: 30000,
       })
-      await page.waitForSelector('#root canvas', { timeout: 45000 })
+      await waitForJBrowseReady(page, { timeout: READY_TIMEOUT })
+      await page.waitForSelector('#root canvas', { timeout: 1000 })
     } catch (e) {
       console.error(`✗ ${name}: never rendered — ${e.message}`)
       if (errors.length)
         console.error('  page errors:', errors.slice(0, 3).join(' | '))
       return null
     }
-    await waitForReady(page)
     // The element, not the page: a view's height is its own — one track or six
     // — so a fixed viewport leaves a band of dead white under the short ones
     // and crops the tall ones. The widget knows how tall it is.

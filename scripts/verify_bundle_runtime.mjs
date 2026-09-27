@@ -28,7 +28,7 @@
 //
 // Needs network, like every other harness run here: the tracks are the local
 // peaks fixture, but the assembly is the hosted hg38 the screenshot specs use
-// (there is no FASTA fixture in this repo). puppeteer resolves from the sibling
+// (there is no FASTA fixture in this repo). @jbrowse/capture resolves from the sibling
 // jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
 // Run:  node scripts/verify_bundle_runtime.mjs
 import { ANYWIDGET_LOADER, launch, serveRepo } from './browser_harness.mjs'

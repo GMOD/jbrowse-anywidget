@@ -1,33 +1,26 @@
-// What screenshot_examples.mjs and verify_bundle_runtime.mjs both need: puppeteer
-// out of the sibling jbrowse-components checkout, a static server over this
+// What screenshot_examples.mjs and verify_bundle_runtime.mjs both need:
+// @jbrowse/capture out of the sibling jbrowse-components checkout, a static server over this
 // repo, and a browser that renders WebGL with no GPU. Shared because the two
 // copies of it had already drifted — one launched a second identical browser for
 // specs whose `headed` field was absent rather than false.
 
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { createRequire } from 'node:module'
 import { extname, join } from 'node:path'
 
-// puppeteer isn't a dep of this repo; resolve it from the sibling
-// jbrowse-components checkout (override with PUPPETEER_FROM=/path/to/pkg-dir).
-export const MONOREPO =
+// The sibling jbrowse-components checkout (override with
+// PUPPETEER_FROM=/path/to/its/package.json), whose @jbrowse/capture source this
+// imports directly: the readiness wait, and a launch that finds a system
+// Chrome before puppeteer's own download.
+const MONOREPO =
   process.env.PUPPETEER_FROM ??
   new URL('../../jbrowse-components/package.json', import.meta.url).pathname
 
-export const puppeteer = createRequire(MONOREPO)('puppeteer')
-
-/** Resolve a path inside that checkout, for importing its source directly. */
-export const fromMonorepo = subpath =>
-  new URL(subpath, `file://${MONOREPO}`).href
-
-// The chrome-picking half of the same borrowing: CHROME_PATH, then the first
-// installed system browser, then puppeteer's own download. Without it a box
-// that has google-chrome but has never run `puppeteer browsers install` fails
-// at launch with a version string and no hint.
-const { findChromeExecutable } = await import(
-  fromMonorepo('products/jbrowse-capture/src/browser.ts')
+const capture = await import(
+  new URL('products/jbrowse-capture/src/index.ts', `file://${MONOREPO}`).href
 )
+
+export const { waitForJBrowseReady } = capture
 
 /**
  * Browser-side source both harness pages start with: load a built bundle the
@@ -100,8 +93,7 @@ export async function serveRepo(harness) {
 // views but paints nothing for molstar's 3D structure canvas. `headed` opens a
 // real window on the host GPU instead — so those figures need a desktop session,
 // and every other one keeps working over SSH/CI.
-const HEADLESS_ARGS = [
-  '--no-sandbox',
+const SWIFTSHADER_ARGS = [
   '--enable-unsafe-swiftshader',
   '--use-gl=angle',
   '--use-angle=swiftshader',
@@ -109,9 +101,8 @@ const HEADLESS_ARGS = [
 ]
 
 export function launch(headed = false) {
-  return puppeteer.launch({
+  return capture.launchBrowser({
     headless: !headed,
-    executablePath: findChromeExecutable(),
-    args: headed ? ['--no-sandbox'] : HEADLESS_ARGS,
+    args: headed ? [] : SWIFTSHADER_ARGS,
   })
 }
