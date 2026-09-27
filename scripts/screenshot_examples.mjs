@@ -19,9 +19,9 @@ import {
 
 // readiness waits come from the same checkout's @jbrowse/capture, so a capture
 // here uses the identical signals jb2capture and the website screenshot
-// generator use (per-display paint attributes, the loading overlay, visible
+// generator use (per-display phase attributes, the loading overlay, visible
 // "Loading…" banners) instead of a bespoke sleep
-const { waitForDisplaysDone, waitForLoadingComplete, waitForQuiescent } =
+const { waitForLoadingComplete, waitForQuiescent } =
   await import(fromMonorepo('products/jbrowse-capture/src/index.ts'))
 
 const specs = JSON.parse(
@@ -82,14 +82,13 @@ async function browserFor(headed = false) {
 const READY_TIMEOUT = 90000
 
 // ready when the loading overlay is gone, no "Downloading…"/"Loading…" status
-// text remains, and every display has flipped to its `-done` test-id
+// text remains, and no display is still fetching or unpainted
 async function waitForReady(page) {
   await waitForLoadingComplete(page, {
     waitForDownloads: true,
     timeout: READY_TIMEOUT,
   })
   await waitForQuiescent(page, { timeout: READY_TIMEOUT })
-  await waitForDisplaysDone(page, READY_TIMEOUT)
 }
 
 // Render one spec in a fresh page and write its figure. Returns the page errors
