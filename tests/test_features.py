@@ -135,7 +135,7 @@ def test_extra_keywords_are_track_config():
     displays = [
         {
             "type": "LinearMarkDisplay",
-            "marks": [{"shape": "point", "encoding": {"y": "log2fc"}}],
+            "marks": [{"mark": "point", "encoding": {"y": "log2fc"}}],
         }
     ]
     rows = [{"refName": "1", "start": 0, "end": 10, "log2fc": 1.5}]

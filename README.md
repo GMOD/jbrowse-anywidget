@@ -331,7 +331,7 @@ features_track(
         "type": "LinearMarkDisplay",
         "scales": {"y": {"title": "log2 fold-change", "rules": [1, -1]}},
         "marks": [{
-            "shape": "point",
+            "mark": "point",
             "encoding": {
                 "y": "log2fc",
                 "color": {

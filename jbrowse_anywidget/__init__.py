@@ -172,7 +172,7 @@ def features_track(
             displays=[{
                 "type": "LinearMarkDisplay",
                 "marks": [{
-                    "shape": "point",
+                    "mark": "point",
                     "encoding": {
                         "y": "log2fc",
                         "color": {"field": "sig", "scale": "categorical"},
